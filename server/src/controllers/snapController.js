@@ -6,7 +6,7 @@ const Message = require('../models/Message');
 // POST /api/snaps/send
 const sendSnap = async (req, res, next) => {
   try {
-    const { receiverId, duration, mediaType } = req.body;
+    const { receiverId, duration, mediaType, filter, isMirrored } = req.body;
     const senderId = req.user._id;
 
     if (!req.file) {
@@ -32,6 +32,8 @@ const sendSnap = async (req, res, next) => {
       mediaUrl: result.secure_url,
       mediaType: mediaType || 'image',
       duration: duration || 5,
+      filter: filter || 'none',
+      isMirrored: isMirrored === 'true',
     });
 
     const conversationId = [senderId.toString(), receiverId.toString()].sort().join('_');
@@ -72,6 +74,17 @@ const sendSnap = async (req, res, next) => {
     }
 
     res.status(201).json({ success: true, snap });
+
+    // Schedule deletion from Cloudinary after 30 minutes
+    const publicId = result.public_id;
+    setTimeout(async () => {
+      try {
+        console.log(`Auto-deleting Cloudinary asset: ${publicId}`);
+        await cloudinary.uploader.destroy(publicId);
+      } catch (err) {
+        console.error(`Failed to auto-delete asset ${publicId}:`, err);
+      }
+    }, 30 * 60 * 1000); // 30 minutes
   } catch (error) {
     next(error);
   }

@@ -52,6 +52,7 @@ interface ChatState {
   markRead: (conversationId: string, senderId: string) => void;
   updateConversationOnline: (userId: string, isOnline: boolean, lastSeen?: string) => void;
   removeMessage: (messageId: string, conversationId: string) => void;
+  clearConversation: (conversationId: string) => Promise<void>;
   clearMessages: () => void;
 }
 
@@ -210,6 +211,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
           : c
       )
     }));
+  },
+
+  clearConversation: async (conversationId) => {
+    try {
+      await api.delete(`/chat/messages/${conversationId}/clear`);
+      set((state) => ({
+        activeMessages: state.activeConversationId === conversationId ? [] : state.activeMessages,
+        conversations: state.conversations.map(c => 
+          c.conversationId === conversationId ? { ...c, lastMessage: null, unreadCount: 0 } : c
+        )
+      }));
+    } catch (err: any) {
+      console.error('Failed to clear conversation:', err);
+      throw err;
+    }
   },
 
   clearMessages: () => set({ activeMessages: [], activeConversationId: null, nextCursor: null, hasMoreMessages: false }),

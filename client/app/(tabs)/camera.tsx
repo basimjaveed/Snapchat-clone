@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, Platform, FlatList } from 'react-native';
 import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -8,8 +8,17 @@ import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [activeFilter, setActiveFilter] = useState('none');
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
+
+  const FILTERS = [
+    { id: 'none', label: 'None', color: 'transparent', icon: 'radio-button-off' },
+    { id: 'glow', label: 'Glow', color: 'rgba(255, 255, 200, 0.15)', icon: 'sparkles' },
+    { id: 'moonlight', label: 'Moon', color: 'rgba(200, 200, 255, 0.15)', icon: 'moon-outline' },
+    { id: 'frame', label: 'Frame', color: 'transparent', icon: 'square-outline' },
+    { id: 'sunset', label: 'Sunset', color: 'rgba(255, 0, 100, 0.1)', icon: 'sunny' },
+  ];
 
   if (!permission) {
     // Camera permissions are still loading.
@@ -38,7 +47,12 @@ export default function CameraScreen() {
         // Navigate to preview with the image URI
         router.push({
           pathname: '/snap/preview',
-          params: { uri: photo.uri, type: 'image' }
+          params: { 
+            uri: photo.uri, 
+            type: 'image',
+            filter: activeFilter,
+            isMirrored: facing === 'front' ? 'true' : 'false'
+          }
         });
       }
     }
@@ -50,26 +64,71 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-        <SafeAreaView style={styles.overlay}>
-          <View style={styles.topBar}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-              <Ionicons name="close" size={30} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={toggleCameraFacing} style={styles.iconBtn}>
-              <Ionicons name="camera-reverse-outline" size={30} color="#fff" />
-            </TouchableOpacity>
-          </View>
+      <View style={styles.cameraContainer}>
+        <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
+          {/* Live Filter Overlay */}
+          <View 
+            style={[
+              styles.filterOverlay, 
+              { backgroundColor: FILTERS.find(f => f.id === activeFilter)?.color }
+            ]} 
+          />
 
-          <View style={styles.bottomBar}>
-            <View style={styles.spacer} />
-            <TouchableOpacity style={styles.captureBtn} onPress={takePicture}>
-              <View style={styles.captureBtnInner} />
-            </TouchableOpacity>
-            <View style={styles.spacer} />
-          </View>
-        </SafeAreaView>
-      </CameraView>
+          {/* Frame Filter */}
+          {activeFilter === 'frame' && (
+            <View style={styles.frameOverlay}>
+              <View style={styles.whiteFrame} />
+            </View>
+          )}
+          
+          <SafeAreaView style={styles.overlay}>
+            <View style={styles.topBar}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+                <Ionicons name="close" size={30} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={toggleCameraFacing} style={styles.iconBtn}>
+                <Ionicons name="camera-reverse-outline" size={30} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.bottomBar}>
+              <View style={styles.filterSelectorWrapper}>
+                <FlatList
+                  horizontal
+                  data={FILTERS}
+                  keyExtractor={(item) => item.id}
+                  showsHorizontalScrollIndicator={false}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity 
+                      style={[
+                        styles.filterItem,
+                        activeFilter === item.id && styles.filterItemActive
+                      ]}
+                      onPress={() => setActiveFilter(item.id)}
+                    >
+                      <View style={[styles.filterThumb, { backgroundColor: item.color || '#fff' }]}>
+                        <Ionicons 
+                          name={item.icon as any} 
+                          size={18} 
+                          color={activeFilter === item.id ? '#000' : '#fff'} 
+                        />
+                      </View>
+                      <Text style={styles.filterLabel}>{item.label}</Text>
+                    </TouchableOpacity>
+                  )}
+                  contentContainerStyle={styles.filterList}
+                />
+              </View>
+
+              <View style={styles.captureSection}>
+                <TouchableOpacity style={styles.captureBtn} onPress={takePicture}>
+                  <View style={styles.captureBtnInner} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </SafeAreaView>
+        </CameraView>
+      </View>
     </View>
   );
 }
@@ -84,8 +143,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     paddingBottom: 10,
   },
+  cameraContainer: {
+    flex: 1,
+    overflow: 'hidden',
+  },
   camera: {
     flex: 1,
+  },
+  filterOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    pointerEvents: 'none',
+  },
+  frameOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  whiteFrame: {
+    width: '100%',
+    height: '100%',
+    borderWidth: 15,
+    borderColor: '#fff',
+    borderRadius: RADIUS.lg,
   },
   overlay: {
     flex: 1,
@@ -97,10 +178,43 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
   },
   bottomBar: {
-    flexDirection: 'row',
+    paddingBottom: 20,
+  },
+  filterSelectorWrapper: {
+    marginBottom: SPACING.lg,
+  },
+  filterList: {
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.sm,
+  },
+  filterItem: {
+    alignItems: 'center',
+    marginRight: SPACING.lg,
+    opacity: 0.7,
+  },
+  filterItemActive: {
+    opacity: 1,
+  },
+  filterThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 40,
+    marginBottom: 4,
+  },
+  filterLabel: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  captureSection: {
+    alignItems: 'center',
   },
   iconBtn: {
     width: 50,

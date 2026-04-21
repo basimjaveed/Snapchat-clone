@@ -23,7 +23,15 @@ const snapSchema = new mongoose.Schema(
     },
     duration: {
       type: Number,
-      default: 5, // Default 5 seconds
+      default: 5, // 0 means infinity
+    },
+    filter: {
+      type: String,
+      default: 'none',
+    },
+    isMirrored: {
+      type: Boolean,
+      default: false,
     },
     viewed: {
       type: Boolean,

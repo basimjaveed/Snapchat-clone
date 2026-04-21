@@ -8,7 +8,9 @@ import {
   Platform,
   TouchableOpacity,
   TextInput,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert,
+  Modal
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,7 +39,8 @@ export default function ChatDetailScreen() {
     typingUsers,
     conversations,
     markRead,
-    fetchConversations
+    fetchConversations,
+    clearConversation
   } = useChatStore();
   const { friends } = useFriendStore();
   const { user: me } = useAuthStore();
@@ -141,6 +144,38 @@ export default function ChatDetailScreen() {
     }
   };
 
+  const handleClear = () => {
+    if (!conversationId) return;
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to delete all messages in this chat?');
+      if (confirmed) {
+        clearConversation(conversationId as string).catch(() => {
+          alert('Failed to clear conversation');
+        });
+      }
+    } else {
+      Alert.alert(
+        'Clear Conversation',
+        'Are you sure you want to delete all messages in this chat?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Clear', 
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await clearConversation(conversationId as string);
+              } catch (err: any) {
+                Alert.alert('Error', 'Failed to clear conversation');
+              }
+            }
+          },
+        ]
+      );
+    }
+  };
+
   const handleTyping = (value: string) => {
     setText(value);
     if (!activeFriend) return;
@@ -184,6 +219,16 @@ export default function ChatDetailScreen() {
             <TouchableOpacity onPress={() => router.push('/(tabs)/friends')} style={styles.backButton}>
               <Ionicons name="chevron-back" size={28} color={COLORS.primary} />
             </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <View style={styles.headerRight}>
+              <TouchableOpacity onPress={handleClear} style={styles.headerIconBtn}>
+                <Ionicons name="trash-outline" size={22} color={COLORS.error || '#ff4444'} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/snap')} style={styles.headerIconBtn}>
+                <Ionicons name="camera-outline" size={24} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
@@ -260,6 +305,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTextContainer: {
+    marginLeft: SPACING.sm,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: SPACING.md,
+  },
+  headerIconBtn: {
+    padding: SPACING.xs,
     marginLeft: SPACING.sm,
   },
   headerName: {

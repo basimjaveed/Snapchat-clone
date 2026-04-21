@@ -19,8 +19,9 @@ import Button from '../../components/Button';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 
 export default function SnapPreview() {
-  const { uri, type } = useLocalSearchParams<{ uri: string, type: string }>();
+  const { uri, type, filter: initialFilter, isMirrored } = useLocalSearchParams<{ uri: string, type: string, filter: string, isMirrored: string }>();
   const [duration, setDuration] = useState(5);
+  const [filter, setFilter] = useState(initialFilter || 'none');
   const [isPickerVisible, setIsPickerVisible] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -32,6 +33,22 @@ export default function SnapPreview() {
   useEffect(() => {
     fetchFriends();
   }, []);
+
+  const FILTERS = [
+    { id: 'none', label: 'None', color: 'transparent' },
+    { id: 'glow', label: 'Glow', color: 'rgba(255, 255, 200, 0.2)' },
+    { id: 'moonlight', label: 'Moonlight', color: 'rgba(200, 200, 255, 0.15)' },
+    { id: 'frame', label: 'Frame', color: 'transparent', frame: true },
+    { id: 'sunset', label: 'Sunset', color: 'rgba(255, 0, 100, 0.1)' },
+  ];
+
+  const toggleDuration = () => {
+    setDuration(prev => {
+      if (prev === 10) return 0; // 0 represents Infinity
+      if (prev === 0) return 1;
+      return prev + 1;
+    });
+  };
 
   const handleSend = async () => {
     if (!selectedFriend || !uri) return;
@@ -70,6 +87,7 @@ export default function SnapPreview() {
       formData.append('receiverId', selectedFriend);
       formData.append('duration', duration.toString());
       formData.append('mediaType', type || 'image');
+      formData.append('filter', filter); // Save filter choice
 
       console.log('Sending snap...');
       await sendSnap(formData);
@@ -86,7 +104,29 @@ export default function SnapPreview() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Image source={{ uri }} style={styles.preview} />
+      <View style={styles.imageContainer}>
+        <Image 
+          source={{ uri }} 
+          style={[
+            styles.preview, 
+            isMirrored === 'true' && { transform: [{ scaleX: -1 }] }
+          ]} 
+        />
+        {/* Filter Overlay */}
+        <View style={[styles.filterOverlay, { backgroundColor: FILTERS.find(f => f.id === filter)?.color }]} />
+        
+        {/* Glow Enhancement */}
+        {filter === 'glow' && (
+          <View style={[styles.filterOverlay, { backgroundColor: 'rgba(255,255,255,0.1)' }]} />
+        )}
+
+        {/* Frame Filter */}
+        {FILTERS.find(f => f.id === filter)?.frame && (
+          <View style={styles.frameOverlay}>
+            <View style={styles.whiteFrame} />
+          </View>
+        )}
+      </View>
 
       <View style={styles.overlay}>
         <View style={styles.topBar}>
@@ -98,10 +138,22 @@ export default function SnapPreview() {
         <View style={styles.sideBar}>
           <TouchableOpacity 
             style={styles.sideBtn} 
-            onPress={() => setDuration(prev => (prev >= 10 ? 1 : prev + 1))}
+            onPress={toggleDuration}
           >
-            <Ionicons name="timer-outline" size={24} color="#fff" />
-            <Text style={styles.sideBtnText}>{duration}s</Text>
+            <Ionicons name={duration === 0 ? "infinite-outline" : "timer-outline"} size={26} color="#fff" />
+            <Text style={styles.sideBtnText}>{duration === 0 ? '∞' : `${duration}s`}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.sideBtn} 
+            onPress={() => {
+              const currentIdx = FILTERS.findIndex(f => f.id === filter);
+              const nextIdx = (currentIdx + 1) % FILTERS.length;
+              setFilter(FILTERS[nextIdx].id);
+            }}
+          >
+            <Ionicons name="color-filter-outline" size={26} color="#fff" />
+            <Text style={styles.sideBtnText}>Filter</Text>
           </TouchableOpacity>
         </View>
 
@@ -165,9 +217,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  preview: {
+  imageContainer: {
     ...StyleSheet.absoluteFillObject,
+  },
+  preview: {
+    flex: 1,
     resizeMode: 'cover',
+  },
+  filterOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  frameOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  whiteFrame: {
+    width: '100%',
+    height: '100%',
+    borderWidth: 15,
+    borderColor: '#fff',
+    borderRadius: RADIUS.lg,
   },
   overlay: {
     flex: 1,

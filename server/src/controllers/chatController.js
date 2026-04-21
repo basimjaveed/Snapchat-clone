@@ -2,6 +2,7 @@ const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const FriendRequest = require('../models/FriendRequest');
 const User = require('../models/User');
+const Snap = require('../models/Snap');
 
 // Check if two users are friends
 const areFriends = async (userId1, userId2) => {
@@ -136,4 +137,39 @@ const sendMessage = async (req, res, next) => {
   }
 };
 
-module.exports = { getConversations, getMessages, sendMessage };
+const clearConversation = async (req, res, next) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user._id;
+
+    // Verify user is member of conversation (if it exists)
+    const conversation = await Conversation.findOne({ conversationId, participants: userId });
+
+    // Delete all messages in the conversation
+    await Message.deleteMany({ conversationId });
+
+    if (conversation) {
+      // Update conversation record to reflect cleared status
+      await Conversation.findOneAndUpdate(
+        { conversationId },
+        { 
+          $set: { 
+            lastMessage: null,
+            [`unreadCount.${userId}`]: 0 
+          } 
+        }
+      );
+    }
+
+    // Notify user's clients (optional: notify other participant too?)
+    // For simplicity, we just respond success. The client will clear state.
+    const io = req.app.get('io');
+    io.emit('conversation_cleared', { conversationId });
+
+    res.json({ success: true, message: 'Conversation cleared successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getConversations, getMessages, sendMessage, clearConversation };

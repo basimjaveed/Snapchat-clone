@@ -32,35 +32,46 @@ export default function SnapView() {
 
   const snap = receivedSnaps.find(s => s._id === id);
 
+  const FILTERS = [
+    { id: 'none', label: 'None', color: 'transparent' },
+    { id: 'glow', label: 'Glow', color: 'rgba(255, 255, 200, 0.2)' },
+    { id: 'moonlight', label: 'Moonlight', color: 'rgba(200, 200, 255, 0.15)' },
+    { id: 'frame', label: 'Frame', color: 'transparent', frame: true },
+    { id: 'sunset', label: 'Sunset', color: 'rgba(255, 0, 100, 0.1)' },
+  ];
+
   useEffect(() => {
     if (!snap) {
       router.back();
       return;
     }
 
-    setTimeLeft(snap.duration);
-    
-    // Start animation
-    progress.value = withTiming(1, { 
-      duration: snap.duration * 1000,
-      easing: Easing.linear
-    }, (finished) => {
-      if (finished) {
-        runOnJS(handleFinish)();
-      }
-    });
-
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
+    if (snap.duration > 0) {
+      setTimeLeft(snap.duration);
+      // Start animation
+      progress.value = withTiming(1, { 
+        duration: snap.duration * 1000,
+        easing: Easing.linear
+      }, (finished) => {
+        if (finished) {
+          runOnJS(handleFinish)();
         }
-        return prev - 1;
       });
-    }, 1000);
 
-    return () => clearInterval(timer);
+      const timer = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    } else {
+      setTimeLeft(0); // Represent infinity
+    }
   }, [snap]);
 
   const handleFinish = async () => {
@@ -68,6 +79,10 @@ export default function SnapView() {
       await markSnapViewed(id);
     }
     router.back();
+  };
+
+  const closeSnap = () => {
+    handleFinish(); // Always mark viewed when manually closed
   };
 
   const progressStyle = useAnimatedStyle(() => ({
@@ -78,19 +93,54 @@ export default function SnapView() {
 
   return (
     <View style={styles.container}>
-      <Image source={{ uri: snap.mediaUrl }} style={styles.content} />
+      <View style={styles.contentContainer}>
+        <Image 
+          source={{ uri: snap.mediaUrl }} 
+          style={[
+            styles.content,
+            (snap as any).isMirrored && { transform: [{ scaleX: -1 }] }
+          ]} 
+        />
+        {/* Filter Overlay */}
+        <View 
+          style={[
+            styles.filterOverlay, 
+            { backgroundColor: FILTERS.find(f => f.id === (snap as any).filter)?.color || 'transparent' }
+          ]} 
+        />
+
+        {/* Glow Enhancement */}
+        {(snap as any).filter === 'glow' && (
+          <View style={[styles.filterOverlay, { backgroundColor: 'rgba(255,255,255,0.1)' }]} />
+        )}
+
+        {/* Frame Filter */}
+        {FILTERS.find(f => f.id === (snap as any).filter)?.frame && (
+          <View style={styles.frameOverlay}>
+            <View style={styles.whiteFrame} />
+          </View>
+        )}
+      </View>
 
       <SafeAreaView style={styles.overlay}>
         <View style={styles.topBar}>
-          <View style={styles.progressContainer}>
-            <Animated.View style={[styles.progressBar, progressStyle]} />
-          </View>
+          {snap.duration > 0 && (
+            <View style={styles.progressContainer}>
+              <Animated.View style={[styles.progressBar, progressStyle]} />
+            </View>
+          )}
           <View style={styles.header}>
             <View>
               <Text style={styles.senderName}>{snap.sender.displayName}</Text>
-              <Text style={styles.timeTag}>{timeLeft}s left</Text>
+              <View style={styles.durationRow}>
+                {snap.duration === 0 ? (
+                  <Ionicons name="infinite-outline" size={14} color="rgba(255,255,255,0.8)" />
+                ) : (
+                  <Text style={styles.timeTag}>{timeLeft}s left</Text>
+                )}
+              </View>
             </View>
-            <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+            <TouchableOpacity onPress={closeSnap} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -105,12 +155,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  content: {
+  contentContainer: {
     ...StyleSheet.absoluteFillObject,
+  },
+  content: {
+    flex: 1,
     resizeMode: 'contain',
+  },
+  filterOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  frameOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  whiteFrame: {
+    width: '100%',
+    height: '100%',
+    borderWidth: 15,
+    borderColor: '#fff',
+    borderRadius: RADIUS.lg,
   },
   overlay: {
     flex: 1,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
   },
   topBar: {
     padding: SPACING.md,
