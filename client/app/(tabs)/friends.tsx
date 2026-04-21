@@ -7,7 +7,9 @@ import {
   RefreshControl,
   ActivityIndicator
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useFriendStore } from '../../stores/friendStore';
+import { useChatStore } from '../../stores/chatStore';
 import Input from '../../components/Input';
 import UserCard from '../../components/UserCard';
 import FriendRequestCard from '../../components/FriendRequestCard';
@@ -15,6 +17,7 @@ import { COLORS, FONTS, SPACING } from '../../constants/theme';
 
 export default function FriendsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
+  const router = useRouter();
   const { 
     friends, 
     pendingRequests, 
@@ -29,6 +32,25 @@ export default function FriendsScreen() {
     acceptRequest,
     rejectRequest
   } = useFriendStore();
+
+  const { conversations, fetchConversations } = useChatStore();
+
+  const handleChat = (userId: string) => {
+    // Find if we already have a conversation with this user
+    const existingConv = conversations.find(c => 
+      c.friend?._id === userId
+    );
+
+    if (existingConv) {
+      router.push(`/chat/${existingConv._id}`);
+    } else {
+      // If no conversation exists, we navigate to a specialized route
+      router.push({
+        pathname: `/chat/new`,
+        params: { userId }
+      });
+    }
+  };
 
   useEffect(() => {
     fetchFriends();
@@ -70,6 +92,7 @@ export default function FriendsScreen() {
               key={user._id} 
               user={user} 
               onAddFriend={() => sendRequest(user._id)} 
+              onChat={() => handleChat(user._id)}
             />
           ))}
         </View>
@@ -104,6 +127,7 @@ export default function FriendsScreen() {
           <UserCard 
             user={{ ...item, friendStatus: 'friends' } as any} 
             onAddFriend={() => {}} 
+            onChat={() => handleChat(item._id)}
           />
         )}
         ListHeaderComponent={renderHeader}

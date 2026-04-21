@@ -40,24 +40,43 @@ export default function SnapPreview() {
       setIsSending(true);
       const formData = new FormData();
       
-      // Prepare file for upload
-      const filename = uri.split('/').pop() || 'snap.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const mimeType = match ? `image/${match[1]}` : `image/jpeg`;
+      if (uri.startsWith('data:')) {
+        // Web: Conver Base64 data URI to Blob
+        const parts = uri.split(';base64,');
+        const contentType = parts[0].split(':')[1];
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
 
-      formData.append('media', {
-        uri: uri,
-        name: filename,
-        type: mimeType,
-      } as any);
+        for (let i = 0; i < rawLength; ++i) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+        
+        const blob = new Blob([uInt8Array], { type: contentType });
+        formData.append('media', blob, `snap.${contentType.split('/')[1]}`);
+      } else {
+        // Native: Prepare file for upload
+        const filename = uri.split('/').pop() || 'snap.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const mimeType = match ? `image/${match[1]}` : `image/jpeg`;
+
+        formData.append('media', {
+          uri: uri,
+          name: filename,
+          type: mimeType,
+        } as any);
+      }
+      
       formData.append('receiverId', selectedFriend);
       formData.append('duration', duration.toString());
       formData.append('mediaType', type || 'image');
 
+      console.log('Sending snap...');
       await sendSnap(formData);
       router.replace('/(tabs)/chat');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to send snap:', err);
+      alert('Failed to send snap: ' + (err.response?.data?.message || err.message));
     } finally {
       setIsSending(false);
     }

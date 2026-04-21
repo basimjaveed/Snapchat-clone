@@ -14,14 +14,19 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useFriendStore } from '../../stores/friendStore';
 import Avatar from '../../components/Avatar';
 import MessageBubble from '../../components/MessageBubble';
 import TypingIndicator from '../../components/TypingIndicator';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import { socketService } from '../../services/socket';
+import api from '../../services/api';
 
 export default function ChatDetailScreen() {
   const { id: conversationId } = useLocalSearchParams<{ id: string }>();
+  const isNewChat = conversationId?.startsWith('new_');
+  const targetUserId = isNewChat ? conversationId?.replace('new_', '') : null;
+
   const { 
     activeMessages, 
     fetchMessages, 
@@ -31,49 +36,128 @@ export default function ChatDetailScreen() {
     clearMessages,
     typingUsers,
     conversations,
-    markRead
+    markRead,
+    fetchConversations
   } = useChatStore();
+  const { friends } = useFriendStore();
   const { user: me } = useAuthStore();
   const [text, setText] = useState('');
   const flatListRef = useRef<FlatList>(null);
   const router = useRouter();
 
-  // Find the other user from conversations list
-  const conversation = conversations.find(c => c.conversationId === conversationId);
-  const friend = conversation?.friend;
-  const isFriendTyping = friend ? typingUsers[friend._id] : false;
+  // Find the other user from conversations list OR from friends list if new
+  const conversation = conversations.find(c => c._id === conversationId);
+  
+  // If we can't find the friend in the conversation object, 
+  // let's try to find them in our friends list using the ID from the URL if possible
+  let friend = isNewChat 
+    ? friends.find(f => f._id === targetUserId)
+    : conversation?.friend;
+
+  // Final fallback: if friend is still missing, try matching against part of the ID 
+  // (common in concatenated ID systems)
+  if (!friend && conversationId && me) {
+    const ids = conversationId.split('_');
+    const otherId = ids.find(id => id !== me._id);
+    if (otherId) {
+      friend = friends.find(f => f._id === otherId);
+    }
+  }
+
+  const [tempFriend, setTempFriend] = useState<any>(null);
+  
+  // Create a live 'activeFriend' that picks up store updates
+  const activeFriend = (() => {
+    // 1. Check if they are a regular friend
+    const storeFriend = friends.find(f => String(f._id) === String(targetUserId || (conversation?.friend?._id)));
+    if (storeFriend) return storeFriend;
+
+    // 2. Check if the conversation object in the store has the updated info
+    if (conversation?.friend) return conversation.friend;
+
+    // 3. Fallback to the temp info we fetched
+    return tempFriend;
+  })();
 
   useEffect(() => {
-    setActiveConversation(conversationId);
-    fetchMessages(conversationId);
+    // If we have an ID but no name, we definitely need to fetch
+    const needsFetch = activeFriend ? !activeFriend.displayName : !!conversationId;
+
+    if (needsFetch && conversationId && me) {
+      const ids = conversationId.split('_');
+      const otherId = ids.find(id => id !== me._id);
+      
+      if (otherId && (!activeFriend || !activeFriend.displayName)) {
+        console.log('Fetching missing friend info for:', otherId);
+        api.get(`/users/${otherId}`).then(res => {
+          setTempFriend(res.data.user);
+        }).catch(err => console.error('Failed to fetch temp friend:', err));
+      }
+    }
+  }, [conversationId, activeFriend?.displayName, me?._id]);
+
+  const isFriendTyping = activeFriend ? typingUsers[activeFriend._id] : false;
+
+  useEffect(() => {
+    if (!isNewChat && conversationId) {
+      setActiveConversation(conversationId);
+      fetchMessages(conversationId);
+    }
     
     return () => {
       clearMessages();
       setActiveConversation(null);
     };
-  }, [conversationId]);
+  }, [conversationId, isNewChat]);
 
   useEffect(() => {
-    if (friend) {
+    if (friend && !isNewChat && conversationId) {
       markRead(conversationId, friend._id);
     }
-  }, [activeMessages.length, friend]);
+  }, [activeMessages.length, friend, isNewChat, conversationId]);
 
-  const handleSend = () => {
-    if (!text.trim() || !friend || !me) return;
-    sendMessage(friend._id, text.trim(), me._id);
-    setText('');
-    socketService.emit('stop_typing', { receiverId: friend._id });
+  const [isSending, setIsSending] = useState(false);
+
+  const handleSend = async () => {
+    if (!text.trim() || isSending) return;
+    if (!activeFriend || !me) {
+      console.error('Cannot send: activeFriend or me is missing', { activeFriend, me });
+      alert('Cannot send: Friend information missing. Try going back and re-opening the chat.');
+      return;
+    }
+    
+    try {
+      setIsSending(true);
+      const messageText = text.trim();
+      setText('');
+      
+      await sendMessage(activeFriend._id, messageText, me._id);
+      socketService.emit('stop_typing', { receiverId: activeFriend._id });
+    } catch (err: any) {
+      alert('Failed to send: ' + err.message);
+      setText(messageText); // Restore text on failure
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleTyping = (value: string) => {
     setText(value);
-    if (!friend) return;
+    if (!activeFriend) return;
     
     if (value.length > 0) {
-      socketService.emit('typing', { receiverId: friend._id });
+      socketService.emit('typing', { receiverId: activeFriend._id });
     } else {
-      socketService.emit('stop_typing', { receiverId: friend._id });
+      socketService.emit('stop_typing', { receiverId: activeFriend._id });
+    }
+  };
+
+  const handleKeyPress = (e: any) => {
+    if (Platform.OS === 'web') {
+      if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
     }
   };
 
@@ -89,15 +173,15 @@ export default function ChatDetailScreen() {
           headerStyle: { backgroundColor: COLORS.bg },
           headerTitle: () => (
             <View style={styles.headerTitleContainer}>
-              <Avatar uri={friend?.avatar} displayName={friend?.displayName} size={34} isOnline={friend?.isOnline} />
+              <Avatar uri={activeFriend?.avatar} displayName={activeFriend?.displayName} size={34} isOnline={activeFriend?.isOnline} />
               <View style={styles.headerTextContainer}>
-                <Text style={styles.headerName}>{friend?.displayName || 'Chat'}</Text>
-                <Text style={styles.headerStatus}>{friend?.isOnline ? 'Online' : 'Offline'}</Text>
+                <Text style={styles.headerName}>{activeFriend?.displayName || 'Chat'}</Text>
+                <Text style={styles.headerStatus}>{activeFriend?.isOnline ? 'Online' : 'Offline'}</Text>
               </View>
             </View>
           ),
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/friends')} style={styles.backButton}>
               <Ionicons name="chevron-back" size={28} color={COLORS.primary} />
             </TouchableOpacity>
           ),
@@ -115,7 +199,15 @@ export default function ChatDetailScreen() {
             renderItem={({ item }) => (
               <MessageBubble 
                 message={item} 
-                isMine={item.sender._id === me?._id} 
+                isMine={String(item.sender?._id || item.sender) === String(me?._id)} 
+                onPress={() => {
+                  if (item.type === 'snap' && item.mediaId) {
+                    router.push({
+                      pathname: '/snap/view',
+                      params: { id: item.mediaId }
+                    });
+                  }
+                }}
               />
             )}
             contentContainerStyle={styles.listContent}
@@ -127,7 +219,7 @@ export default function ChatDetailScreen() {
       </View>
 
       <View style={styles.inputArea}>
-        <TouchableOpacity style={styles.iconBtn}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/camera')}>
           <Ionicons name="camera" size={24} color={COLORS.textSecondary} />
         </TouchableOpacity>
         <View style={styles.inputContainer}>
@@ -138,14 +230,20 @@ export default function ChatDetailScreen() {
             placeholder="Type a message..."
             placeholderTextColor={COLORS.textMuted}
             multiline
+            onKeyPress={handleKeyPress}
+            blurOnSubmit={false}
           />
         </View>
         <TouchableOpacity 
-          style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]} 
+          style={[styles.sendBtn, (!text.trim() || isSending) && styles.sendBtnDisabled]} 
           onPress={handleSend}
-          disabled={!text.trim()}
+          disabled={!text.trim() || isSending}
         >
-          <Ionicons name="send" size={20} color={COLORS.bg} />
+          {isSending ? (
+            <ActivityIndicator size="small" color={COLORS.bg} />
+          ) : (
+            <Ionicons name="send" size={20} color={COLORS.bg} />
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -174,8 +272,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   backButton: {
+    padding: 10,
     marginLeft: -10,
-    marginRight: 10,
   },
   messagesContainer: {
     flex: 1,

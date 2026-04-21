@@ -19,9 +19,17 @@ const messageSchema = new mongoose.Schema(
     },
     text: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
       maxlength: [2000, 'Message cannot exceed 2000 characters'],
+    },
+    mediaUrl: {
+      type: String,
+      default: null,
+    },
+    mediaId: {
+      type: String,
+      default: null,
     },
     type: {
       type: String,

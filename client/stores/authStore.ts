@@ -61,9 +61,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ isLoading: false, isAuthenticated: false });
         return;
       }
-      const user = await authService.getMe();
+      const res = await authService.getMe();
       socketService.connect(token);
-      set({ user, token, isAuthenticated: true, isLoading: false });
+      set({ user: res.user, token, isAuthenticated: true, isLoading: false });
     } catch {
       await authService.logout();
       set({ user: null, token: null, isAuthenticated: false, isLoading: false });

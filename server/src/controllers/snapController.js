@@ -1,6 +1,7 @@
 const Snap = require('../models/Snap');
 const cloudinary = require('../config/cloudinary');
 const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
 
 // POST /api/snaps/send
 const sendSnap = async (req, res, next) => {
@@ -33,25 +34,41 @@ const sendSnap = async (req, res, next) => {
       duration: duration || 5,
     });
 
-    // Update conversation to show "New Snap"
     const conversationId = [senderId.toString(), receiverId.toString()].sort().join('_');
+
+    // Create a Message entry so it shows up in the chat conversation
+    const message = await Message.create({
+      conversationId,
+      sender: senderId,
+      receiver: receiverId,
+      text: 'Sent a Snap',
+      mediaUrl: result.secure_url,
+      mediaId: snap._id,
+      type: 'snap',
+    });
+
+    await message.populate('sender', 'username displayName avatar');
+
+    // Update conversation to show the message and unread count
     await Conversation.findOneAndUpdate(
       { conversationId },
       {
         conversationId,
         participants: [senderId, receiverId],
+        lastMessage: message._id,
         lastMessageAt: new Date(),
         $inc: { [`unreadCount.${receiverId}`]: 1 },
       },
       { upsert: true }
     );
 
-    // Notify receiver
+    // Notify receiver via socket about BOTH the snap and the new message
     const io = req.app.get('io');
     const onlineUsers = req.app.get('onlineUsers');
     const receiverSocketId = onlineUsers?.get(receiverId.toString());
     if (receiverSocketId) {
       io.to(receiverSocketId).emit('new_snap', { snap });
+      io.to(receiverSocketId).emit('new_message', { message });
     }
 
     res.status(201).json({ success: true, snap });
@@ -89,11 +106,22 @@ const viewSnap = async (req, res, next) => {
     snap.viewed = true;
     snap.viewedAt = new Date();
     // After viewing, it will be deleted by TTL index eventually
-    // But we might want to set a very short expiresAt now
     snap.expiresAt = new Date(+new Date() + snap.duration * 1000); 
     await snap.save();
 
-    res.json({ success: true, message: 'Snap viewed' });
+    // Also delete the message from the chat timeline so it "disappears"
+    const message = await Message.findOneAndDelete({ mediaId: snap._id });
+    
+    // Notify clients to remove this message from their state
+    if (message) {
+      const io = req.app.get('io');
+      io.emit('message_deleted', { 
+        messageId: message._id, 
+        conversationId: message.conversationId 
+      });
+    }
+
+    res.json({ success: true, message: 'Snap viewed and removed from chat' });
   } catch (error) {
     next(error);
   }

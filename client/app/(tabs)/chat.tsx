@@ -111,7 +111,6 @@ export default function ChatScreen() {
         data={conversations}
         keyExtractor={(item) => item._id}
         renderItem={renderConversation}
-        ListHeaderComponent={renderSnapsHeader}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl 

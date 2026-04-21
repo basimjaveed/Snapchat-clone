@@ -41,6 +41,11 @@ export default function RootLayout() {
     if (isAuthenticated && token) {
       const socket = socketService.connect(token);
 
+      socket.on('message_deleted', ({ messageId, conversationId }) => {
+        const { removeMessage } = useChatStore.getState();
+        removeMessage(messageId, conversationId);
+      });
+
       socket.on('new_message', ({ message }) => {
         receiveMessage(message);
       });
@@ -63,16 +68,23 @@ export default function RootLayout() {
         setTyping(userId, false);
       });
 
+      socket.on('new_snap', ({ snap }) => {
+        const { addReceivedSnap } = require('../stores/snapStore').useSnapStore.getState();
+        addReceivedSnap(snap);
+      });
+
       socket.on('friend_request_received', () => {
         // We could fetch pending requests here
       });
 
       return () => {
         socket.off('new_message');
+        socket.off('message_deleted');
         socket.off('user_online');
         socket.off('user_offline');
         socket.off('user_typing');
         socket.off('user_stop_typing');
+        socket.off('new_snap');
         socket.off('friend_request_received');
       };
     }

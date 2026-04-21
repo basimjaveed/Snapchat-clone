@@ -8,6 +8,8 @@ export interface Message {
   sender: { _id: string; username: string; displayName: string; avatar: string };
   receiver: string;
   text: string;
+  mediaUrl?: string;
+  mediaId?: string;
   type: string;
   read: boolean;
   readAt: string | null;
@@ -49,6 +51,7 @@ interface ChatState {
   setTyping: (userId: string, isTyping: boolean) => void;
   markRead: (conversationId: string, senderId: string) => void;
   updateConversationOnline: (userId: string, isOnline: boolean, lastSeen?: string) => void;
+  removeMessage: (messageId: string, conversationId: string) => void;
   clearMessages: () => void;
 }
 
@@ -92,26 +95,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: async (receiverId, text, myUserId) => {
-    const socket = socketService.getSocket();
-    if (!socket?.connected) {
-      // Fallback to REST
+  sendMessage: (receiverId, text, myUserId) => {
+    return new Promise(async (resolve, reject) => {
+      const socket = socketService.getSocket();
+      
+      // Try Socket first if connected
+      if (socket && socket.connected) {
+        socketService.emit('send_message', { receiverId, text }, (ack: any) => {
+          if (ack?.success) {
+            set((state) => ({
+              activeMessages: [...state.activeMessages, ack.message],
+            }));
+            get().updateConversationLastMessage(ack.message);
+            resolve(ack.message);
+          } else {
+            console.warn('Socket send failed, falling back to REST');
+            this?.fallbackSendMessage(receiverId, text).then(resolve).catch(reject);
+          }
+        });
+        return;
+      }
+
+      // Fallback to REST API
       try {
         const res = await api.post('/chat/messages', { receiverId, text });
         set((state) => ({ activeMessages: [...state.activeMessages, res.data.message] }));
         get().updateConversationLastMessage(res.data.message);
+        resolve(res.data.message);
       } catch (err: any) {
-        set({ error: err.message });
-      }
-      return;
-    }
-
-    socketService.emit('send_message', { receiverId, text }, (ack: any) => {
-      if (ack?.success) {
-        set((state) => ({
-          activeMessages: [...state.activeMessages, ack.message],
-        }));
-        get().updateConversationLastMessage(ack.message);
+        console.error('REST send failed:', err);
+        reject(err);
       }
     });
   },
@@ -179,10 +192,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
   updateConversationOnline: (userId, isOnline, lastSeen?) => {
     set((state) => ({
       conversations: state.conversations.map((c) =>
-        c.friend._id === userId
+        String(c.friend?._id) === String(userId)
           ? { ...c, friend: { ...c.friend, isOnline, lastSeen: lastSeen || c.friend.lastSeen } }
           : c
       ),
+    }));
+  },
+
+  removeMessage: (messageId, conversationId) => {
+    set((state) => ({
+      activeMessages: state.activeConversationId === conversationId
+        ? state.activeMessages.filter(m => m._id !== messageId)
+        : state.activeMessages,
+      conversations: state.conversations.map(c => 
+        c.conversationId === conversationId && c.lastMessage?._id === messageId
+          ? { ...c, lastMessage: null } // Simplified: in reality we'd fetch previous message
+          : c
+      )
     }));
   },
 

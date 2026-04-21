@@ -126,7 +126,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   setFriendOnline: (userId, isOnline, lastSeen?) => {
     set((state) => ({
       friends: state.friends.map((f) =>
-        f._id === userId ? { ...f, isOnline, lastSeen: lastSeen || f.lastSeen } : f
+        String(f._id) === String(userId) ? { ...f, isOnline, lastSeen: lastSeen || f.lastSeen } : f
       ),
     }));
   },

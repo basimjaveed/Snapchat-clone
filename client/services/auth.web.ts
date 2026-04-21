@@ -1,4 +1,3 @@
-import * as SecureStore from 'expo-secure-store';
 import api from './api';
 
 const TOKEN_KEY = 'token';
@@ -30,14 +29,14 @@ export const authService = {
   },
 
   async saveToken(token: string) {
-    await SecureStore.setItemAsync(TOKEN_KEY, token);
+    localStorage.setItem(TOKEN_KEY, token);
   },
 
   async getToken() {
-    return await SecureStore.getItemAsync(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY);
   },
 
   async removeToken() {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
   },
 };
