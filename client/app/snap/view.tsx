@@ -19,7 +19,7 @@ import Animated, {
   Easing
 } from 'react-native-reanimated';
 import { useSnapStore } from '../../stores/snapStore';
-import { COLORS, SPACING, FONTS } from '../../constants/theme';
+import { COLORS, SPACING, FONTS, RADIUS } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
