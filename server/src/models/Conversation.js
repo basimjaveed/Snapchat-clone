@@ -29,6 +29,15 @@ const conversationSchema = new mongoose.Schema(
       of: Number,
       default: {},
     },
+    streak: {
+      count: { type: Number, default: 0 },
+      lastSnapAt: { type: Date, default: null },
+      lastSenderId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'User', 
+        default: null 
+      },
+    },
   },
   { timestamps: true }
 );

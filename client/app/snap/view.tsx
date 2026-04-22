@@ -33,9 +33,9 @@ export default function SnapView() {
   const snap = receivedSnaps.find(s => s._id === id);
 
   const FILTERS = [
-    { id: 'none', label: 'None', color: 'transparent' },
     { id: 'glow', label: 'Glow', color: 'rgba(255, 255, 200, 0.2)' },
     { id: 'moonlight', label: 'Moonlight', color: 'rgba(200, 200, 255, 0.15)' },
+    { id: 'gold', label: 'Gold', color: 'rgba(255, 215, 0, 0.18)' },
     { id: 'frame', label: 'Frame', color: 'transparent', frame: true },
     { id: 'sunset', label: 'Sunset', color: 'rgba(255, 0, 100, 0.1)' },
   ];

@@ -9,6 +9,8 @@ export interface Snap {
   mediaUrl: string;
   mediaType: 'image' | 'video';
   duration: number;
+  filter?: string;
+  isMirrored?: boolean;
   viewed: boolean;
   createdAt: string;
 }

@@ -15,6 +15,7 @@ const userRoutes = require('./routes/userRoutes');
 const friendRoutes = require('./routes/friendRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const snapRoutes = require('./routes/snapRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 
 // ── Connect to MongoDB ─────────────────────────────────────
 connectDB();
@@ -37,6 +38,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/snaps', snapRoutes);
+app.use('/api/contacts', contactRoutes);
 
 // ── Error handling ─────────────────────────────────────────
 app.use(notFound);

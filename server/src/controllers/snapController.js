@@ -51,7 +51,60 @@ const sendSnap = async (req, res, next) => {
 
     await message.populate('sender', 'username displayName avatar');
 
-    // Update conversation to show the message and unread count
+    const conversation = await Conversation.findOne({ conversationId });
+    
+    let streakUpdate = {};
+    const now = new Date();
+
+    if (conversation && conversation.streak) {
+      const { streak } = conversation;
+      const lastSnapAt = streak.lastSnapAt;
+      const lastSenderId = streak.lastSenderId;
+
+      if (!lastSnapAt) {
+        streakUpdate = {
+          'streak.count': 1,
+          'streak.lastSnapAt': now,
+          'streak.lastSenderId': senderId,
+        };
+      } else {
+        const hoursSinceLast = (now - lastSnapAt) / (1000 * 60 * 60);
+
+        if (hoursSinceLast > 48) {
+          // Streak expired
+          streakUpdate = {
+            'streak.count': 1,
+            'streak.lastSnapAt': now,
+            'streak.lastSenderId': senderId,
+          };
+        } else if (hoursSinceLast > 22) { // Using 22h to be a bit more lenient than strict 24h
+          // New day streak continuation
+          if (lastSenderId && lastSenderId.toString() !== senderId.toString()) {
+            streakUpdate = {
+              'streak.count': streak.count + 1,
+              'streak.lastSnapAt': now,
+              'streak.lastSenderId': senderId,
+            };
+          } else {
+            streakUpdate = { 'streak.lastSnapAt': now };
+          }
+        } else {
+          // Just update timestamp/sender within the same day
+          streakUpdate = {
+            'streak.lastSnapAt': now,
+            'streak.lastSenderId': senderId,
+          };
+        }
+      }
+    } else {
+      streakUpdate = {
+        'streak.count': 1,
+        'streak.lastSnapAt': now,
+        'streak.lastSenderId': senderId,
+      };
+    }
+
+    // Update conversation to show the message, unread count, and streak
     await Conversation.findOneAndUpdate(
       { conversationId },
       {
@@ -60,17 +113,30 @@ const sendSnap = async (req, res, next) => {
         lastMessage: message._id,
         lastMessageAt: new Date(),
         $inc: { [`unreadCount.${receiverId}`]: 1 },
+        $set: streakUpdate,
       },
-      { upsert: true }
+      { upsert: true, new: true }
     );
 
-    // Notify receiver via socket about BOTH the snap and the new message
+    // Notify receiver via socket
     const io = req.app.get('io');
     const onlineUsers = req.app.get('onlineUsers');
     const receiverSocketId = onlineUsers?.get(receiverId.toString());
     if (receiverSocketId) {
       io.to(receiverSocketId).emit('new_snap', { snap });
       io.to(receiverSocketId).emit('new_message', { message });
+    }
+
+    // Send Push Notification
+    const receiver = await User.findById(receiverId).select('pushToken displayName');
+    if (receiver && receiver.pushToken) {
+      const { sendPushNotification } = require('../utils/notifications');
+      sendPushNotification(
+        receiver.pushToken,
+        'New Snap! ⚡',
+        `${req.user.displayName} sent you a snap.`,
+        { type: 'snap', snapId: snap._id }
+      );
     }
 
     res.status(201).json({ success: true, snap });

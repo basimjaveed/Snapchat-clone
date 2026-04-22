@@ -29,6 +29,25 @@ export default function ChatScreen() {
     fetchReceivedSnaps();
   };
 
+  const getStreakIcon = (streak: any) => {
+    if (!streak || streak.count < 1) return null; // Showing streak even from 1 as per user's "keeps changing"
+    
+    const now = new Date();
+    const lastAt = new Date(streak.lastSnapAt);
+    const hoursSinceLast = (now.getTime() - lastAt.getTime()) / (1000 * 60 * 60);
+
+    // If streak is over 48h, it's technically expired (but backend handles reset)
+    if (hoursSinceLast > 48) return null;
+
+    // Show timer if less than 4 hours remains in the 24h window
+    if (hoursSinceLast > 20 && hoursSinceLast <= 24) {
+      return { icon: 'hourglass-outline', color: '#FFFC00', count: streak.count };
+    }
+
+    // Show fire if streak is active (at least 1 day/2 snaps)
+    return { icon: 'flame', color: '#FF9500', count: streak.count };
+  };
+
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -40,38 +59,50 @@ export default function ChatScreen() {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
-  const renderConversation = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-      style={styles.conversationItem}
-      onPress={() => router.push(`/chat/${item.conversationId}`)}
-    >
-      <Avatar 
-        uri={item.friend.avatar} 
-        displayName={item.friend.displayName} 
-        isOnline={item.friend.isOnline}
-        size={50}
-      />
-      <View style={styles.convInfo}>
-        <View style={styles.convHeader}>
-          <Text style={styles.friendName}>{item.friend.displayName}</Text>
-          {item.lastMessageAt && (
-            <Text style={styles.time}>{formatTime(item.lastMessageAt)}</Text>
-          )}
+  const renderConversation = ({ item }: { item: any }) => {
+    const streakInfo = getStreakIcon(item.streak);
+
+    return (
+      <TouchableOpacity 
+        style={styles.conversationItem}
+        onPress={() => router.push(`/chat/${item.conversationId}`)}
+      >
+        <Avatar 
+          uri={item.friend.avatar} 
+          displayName={item.friend.displayName} 
+          isOnline={item.friend.isOnline}
+          size={50}
+        />
+        <View style={styles.convInfo}>
+          <View style={styles.convHeader}>
+            <View style={styles.nameRow}>
+              <Text style={styles.friendName}>{item.friend.displayName}</Text>
+              {streakInfo && (
+                <View style={styles.streakContainer}>
+                  <Text style={styles.streakCount}>{streakInfo.count}</Text>
+                  <Ionicons name={streakInfo.icon as any} size={14} color={streakInfo.color} />
+                </View>
+              )}
+            </View>
+            {item.lastMessageAt && (
+              <Text style={styles.time}>{formatTime(item.lastMessageAt)}</Text>
+            )}
+          </View>
+          <Text 
+            style={[styles.lastMessage, item.unreadCount > 0 && styles.unreadText]}
+            numberOfLines={1}
+          >
+            {item.lastMessage?.text || 'Start a conversation'}
+          </Text>
         </View>
-        <Text 
-          style={[styles.lastMessage, item.unreadCount > 0 && styles.unreadText]}
-          numberOfLines={1}
-        >
-          {item.lastMessage?.text || 'Start a conversation'}
-        </Text>
-      </View>
-      {item.unreadCount > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{item.unreadCount}</Text>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
+        {item.unreadCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{item.unreadCount}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   const renderSnapsHeader = () => {
     if (receivedSnaps.length === 0) return null;
@@ -111,6 +142,7 @@ export default function ChatScreen() {
         data={conversations}
         keyExtractor={(item) => item._id}
         renderItem={renderConversation}
+        ListHeaderComponent={renderSnapsHeader}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl 
@@ -209,6 +241,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  streakContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: SPACING.xs,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  streakCount: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginRight: 2,
   },
   friendName: {
     fontSize: FONTS.sizes.md,

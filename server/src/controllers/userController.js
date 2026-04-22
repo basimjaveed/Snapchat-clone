@@ -63,9 +63,10 @@ const getUserProfile = async (req, res, next) => {
 // PUT /api/users/profile
 const updateProfile = async (req, res, next) => {
   try {
-    const { displayName } = req.body;
+    const { displayName, pushToken } = req.body;
     const updates = {};
     if (displayName) updates.displayName = displayName;
+    if (pushToken) updates.pushToken = pushToken;
 
     const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true, runValidators: true });
     res.json({ success: true, user: user.toPublicJSON() });

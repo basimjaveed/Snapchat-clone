@@ -4,6 +4,8 @@ import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
+import ARCamera from '../../components/ARCamera';
+import { useCameraPermission as useVisionCameraPermission } from 'react-native-vision-camera';
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -14,10 +16,12 @@ export default function CameraScreen() {
 
   const FILTERS = [
     { id: 'none', label: 'None', color: 'transparent', icon: 'radio-button-off' },
-    { id: 'glow', label: 'Glow', color: 'rgba(255, 255, 200, 0.15)', icon: 'sparkles' },
-    { id: 'moonlight', label: 'Moon', color: 'rgba(200, 200, 255, 0.15)', icon: 'moon-outline' },
+    { id: 'glow', label: 'Glow', color: 'rgba(255, 255, 200, 0.2)', icon: 'sparkles' },
+    { id: 'moonlight', label: 'Moonlight', color: 'rgba(200, 200, 255, 0.15)', icon: 'moon-outline' },
+    { id: 'gold', label: 'Gold', color: 'rgba(255, 215, 0, 0.18)', icon: 'trophy-outline' },
     { id: 'frame', label: 'Frame', color: 'transparent', icon: 'square-outline' },
     { id: 'sunset', label: 'Sunset', color: 'rgba(255, 0, 100, 0.1)', icon: 'sunny' },
+    { id: 'squish', label: 'Squish', color: 'transparent', icon: 'happy-outline', isAR: true },
   ];
 
   if (!permission) {
@@ -65,69 +69,73 @@ export default function CameraScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.cameraContainer}>
-        <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-          {/* Live Filter Overlay */}
-          <View 
-            style={[
-              styles.filterOverlay, 
-              { backgroundColor: FILTERS.find(f => f.id === activeFilter)?.color }
-            ]} 
-          />
+        {activeFilter === 'squish' ? (
+          <ARCamera />
+        ) : (
+          <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
+            {/* Live Filter Overlay */}
+            <View 
+              style={[
+                styles.filterOverlay, 
+                { backgroundColor: FILTERS.find(f => f.id === activeFilter)?.color }
+              ]} 
+            />
 
-          {/* Frame Filter */}
-          {activeFilter === 'frame' && (
-            <View style={styles.frameOverlay}>
-              <View style={styles.whiteFrame} />
-            </View>
-          )}
-          
-          <SafeAreaView style={styles.overlay}>
-            <View style={styles.topBar}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-                <Ionicons name="close" size={30} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={toggleCameraFacing} style={styles.iconBtn}>
-                <Ionicons name="camera-reverse-outline" size={30} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.bottomBar}>
-              <View style={styles.filterSelectorWrapper}>
-                <FlatList
-                  horizontal
-                  data={FILTERS}
-                  keyExtractor={(item) => item.id}
-                  showsHorizontalScrollIndicator={false}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity 
-                      style={[
-                        styles.filterItem,
-                        activeFilter === item.id && styles.filterItemActive
-                      ]}
-                      onPress={() => setActiveFilter(item.id)}
-                    >
-                      <View style={[styles.filterThumb, { backgroundColor: item.color || '#fff' }]}>
-                        <Ionicons 
-                          name={item.icon as any} 
-                          size={18} 
-                          color={activeFilter === item.id ? '#000' : '#fff'} 
-                        />
-                      </View>
-                      <Text style={styles.filterLabel}>{item.label}</Text>
-                    </TouchableOpacity>
-                  )}
-                  contentContainerStyle={styles.filterList}
-                />
+            {/* Frame Filter */}
+            {activeFilter === 'frame' && (
+              <View style={styles.frameOverlay}>
+                <View style={styles.whiteFrame} />
               </View>
+            )}
+          </CameraView>
+        )}
+        
+        <SafeAreaView style={styles.overlay} pointerEvents="box-none">
+          <View style={styles.topBar}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+              <Ionicons name="close" size={30} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={toggleCameraFacing} style={styles.iconBtn}>
+              <Ionicons name="camera-reverse-outline" size={30} color="#fff" />
+            </TouchableOpacity>
+          </View>
 
-              <View style={styles.captureSection}>
-                <TouchableOpacity style={styles.captureBtn} onPress={takePicture}>
-                  <View style={styles.captureBtnInner} />
-                </TouchableOpacity>
-              </View>
+          <View style={styles.bottomBar}>
+            <View style={styles.filterSelectorWrapper}>
+              <FlatList
+                horizontal
+                data={FILTERS}
+                keyExtractor={(item) => item.id}
+                showsHorizontalScrollIndicator={false}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={[
+                      styles.filterItem,
+                      activeFilter === item.id && styles.filterItemActive
+                    ]}
+                    onPress={() => setActiveFilter(item.id)}
+                  >
+                    <View style={[styles.filterThumb, { backgroundColor: item.color || '#fff' }]}>
+                      <Ionicons 
+                        name={item.icon as any} 
+                        size={18} 
+                        color={activeFilter === item.id ? '#000' : '#fff'} 
+                      />
+                    </View>
+                    <Text style={styles.filterLabel}>{item.label}</Text>
+                  </TouchableOpacity>
+                )}
+                contentContainerStyle={styles.filterList}
+              />
             </View>
-          </SafeAreaView>
-        </CameraView>
+
+            <View style={styles.captureSection}>
+              <TouchableOpacity style={styles.captureBtn} onPress={takePicture}>
+                <View style={styles.captureBtnInner} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
       </View>
     </View>
   );
@@ -169,7 +177,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
   },
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
   },
   topBar: {

@@ -39,6 +39,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (isAuthenticated && token) {
+      const { registerForPushNotificationsAsync } = require('../services/notifications');
+      registerForPushNotificationsAsync();
+      
       const socket = socketService.connect(token);
 
       socket.on('message_deleted', ({ messageId, conversationId }) => {
@@ -76,6 +79,20 @@ export default function RootLayout() {
       socket.on('friend_request_received', () => {
         // We could fetch pending requests here
       });
+      
+      socket.on('conversation_cleared', ({ conversationId }) => {
+        const { activeConversationId } = useChatStore.getState();
+        // Clear local messages if this conversation is active
+        if (activeConversationId === conversationId) {
+          useChatStore.setState({ activeMessages: [] });
+        }
+        // Update the conversation preview in the list
+        const { conversations } = useChatStore.getState();
+        const updatedConversations = conversations.map(c => 
+          c.conversationId === conversationId ? { ...c, lastMessage: null, unreadCount: 0 } : c
+        );
+        useChatStore.setState({ conversations: updatedConversations });
+      });
 
       return () => {
         socket.off('new_message');
@@ -86,6 +103,7 @@ export default function RootLayout() {
         socket.off('user_stop_typing');
         socket.off('new_snap');
         socket.off('friend_request_received');
+        socket.off('conversation_cleared');
       };
     }
   }, [isAuthenticated, token]);

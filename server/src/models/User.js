@@ -49,6 +49,20 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    phoneNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
+    snapScore: {
+      type: Number,
+      default: 0,
+    },
+    pushToken: {
+      type: String,
+      default: '',
+    },
   },
   { timestamps: true }
 );
@@ -76,6 +90,7 @@ userSchema.methods.toPublicJSON = function () {
     avatar: this.avatar,
     isOnline: this.isOnline,
     lastSeen: this.lastSeen,
+    snapScore: this.snapScore,
     createdAt: this.createdAt,
   };
 };

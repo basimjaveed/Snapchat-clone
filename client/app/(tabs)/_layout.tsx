@@ -1,8 +1,10 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/theme';
 
 export default function TabsLayout() {
+  const router = useRouter();
+
   return (
     <Tabs
       screenOptions={{
@@ -25,6 +27,15 @@ export default function TabsLayout() {
         },
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
+        headerRight: () => (
+          <Ionicons 
+            name="person-add" 
+            size={24} 
+            color={COLORS.textPrimary} 
+            style={{ marginRight: 15 }}
+            onPress={() => router.push('/friends/add')}
+          />
+        ),
       }}
     >
       <Tabs.Screen

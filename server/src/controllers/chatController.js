@@ -131,6 +131,18 @@ const sendMessage = async (req, res, next) => {
       io.to(receiverSocketId).emit('new_message', { message });
     }
 
+    // Send Push Notification
+    const receiver = await User.findById(receiverId).select('pushToken displayName');
+    if (receiver && receiver.pushToken) {
+      const { sendPushNotification } = require('../utils/notifications');
+      sendPushNotification(
+        receiver.pushToken,
+        `${req.user.displayName}`,
+        text.trim(),
+        { type: 'message', conversationId }
+      );
+    }
+
     res.status(201).json({ success: true, message });
   } catch (error) {
     next(error);
@@ -161,10 +173,18 @@ const clearConversation = async (req, res, next) => {
       );
     }
 
-    // Notify user's clients (optional: notify other participant too?)
-    // For simplicity, we just respond success. The client will clear state.
+    // Notify participants via socket
     const io = req.app.get('io');
-    io.emit('conversation_cleared', { conversationId });
+    const onlineUsers = req.app.get('onlineUsers');
+    
+    if (conversation) {
+      conversation.participants.forEach(participantId => {
+        const socketId = onlineUsers?.get(participantId.toString());
+        if (socketId) {
+          io.to(socketId).emit('conversation_cleared', { conversationId });
+        }
+      });
+    }
 
     res.json({ success: true, message: 'Conversation cleared successfully' });
   } catch (error) {
