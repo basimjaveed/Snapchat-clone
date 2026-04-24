@@ -4,7 +4,7 @@ import { API_URL } from '../constants/api';
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000,
+  timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -17,6 +17,7 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.log('API Error:', error);
     const message = error.response?.data?.message || error.message || 'Something went wrong';
     return Promise.reject(new Error(message));
   }

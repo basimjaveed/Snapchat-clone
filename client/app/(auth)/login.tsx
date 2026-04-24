@@ -18,11 +18,21 @@ import { COLORS, FONTS, SPACING } from '../../constants/theme';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [validationError, setValidationError] = useState('');
   const { login, isLoading, error, clearError } = useAuthStore();
   const router = useRouter();
 
   const handleLogin = async () => {
-    if (!email || !password) return;
+    if (!email || !email.trim()) {
+      setValidationError('Email is required');
+      return;
+    }
+    if (!password) {
+      setValidationError('Password is required');
+      return;
+    }
+    
+    setValidationError('');
     try {
       await login({ email, password });
     } catch (err) {
@@ -52,6 +62,7 @@ export default function LoginScreen() {
             onChangeText={(text) => {
               setEmail(text);
               if (error) clearError();
+              if (validationError) setValidationError('');
             }}
             keyboardType="email-address"
             leftIcon="mail-outline"
@@ -63,12 +74,13 @@ export default function LoginScreen() {
             onChangeText={(text) => {
               setPassword(text);
               if (error) clearError();
+              if (validationError) setValidationError('');
             }}
             isPassword
             leftIcon="lock-closed-outline"
           />
 
-          {error && <Text style={styles.errorText}>{error}</Text>}
+          {(error || validationError) && <Text style={styles.errorText}>{error || validationError}</Text>}
 
           <Button
             title="Log In"

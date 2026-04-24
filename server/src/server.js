@@ -49,7 +49,8 @@ const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: { origin: process.env.CLIENT_URL || '*', credentials: true },
-  pingTimeout: 60000,
+  pingTimeout: 120000,
+  pingInterval: 25000,
 });
 
 // Shared online user map: userId → socketId

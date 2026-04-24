@@ -22,14 +22,33 @@ export default function SignupScreen() {
     email: '',
     password: '',
   });
+  const [validationError, setValidationError] = useState('');
   
   const { signup, isLoading, error, clearError } = useAuthStore();
   const router = useRouter();
 
   const handleSignup = async () => {
     const { username, displayName, email, password } = form;
-    if (!username || !displayName || !email || !password) return;
     
+    // Validate all fields
+    if (!username || !username.trim()) {
+      setValidationError('Username is required');
+      return;
+    }
+    if (!displayName || !displayName.trim()) {
+      setValidationError('Display name is required');
+      return;
+    }
+    if (!email || !email.trim()) {
+      setValidationError('Email is required');
+      return;
+    }
+    if (!password || password.length < 6) {
+      setValidationError('Password must be at least 6 characters');
+      return;
+    }
+    
+    setValidationError('');
     try {
       await signup(form);
     } catch (err) {
@@ -40,6 +59,7 @@ export default function SignupScreen() {
   const updateForm = (key: string, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
     if (error) clearError();
+    if (validationError) setValidationError('');
   };
 
   return (
@@ -85,7 +105,7 @@ export default function SignupScreen() {
             leftIcon="lock-closed-outline"
           />
 
-          {error && <Text style={styles.errorText}>{error}</Text>}
+          {(error || validationError) && <Text style={styles.errorText}>{error || validationError}</Text>}
 
           <Button
             title="Sign Up"

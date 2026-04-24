@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { syncContacts, updateMyPhoneNumber } = require('../controllers/contactController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/auth');
 
 router.use(protect);
 

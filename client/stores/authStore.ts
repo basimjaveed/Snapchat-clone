@@ -8,6 +8,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  hasLoadedOnce: boolean; // Track if we've attempted to load the user at least once
 
   signup: (data: { username: string; email: string; password: string; displayName: string }) => Promise<void>;
   login: (data: { email: string; password: string }) => Promise<void>;
@@ -22,6 +23,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   isLoading: true,
   error: null,
+  hasLoadedOnce: false,
 
   signup: async (data) => {
     try {
@@ -57,16 +59,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
       const token = await authService.getToken();
+      console.log('loadUser: token exists?', !!token);
+
       if (!token) {
-        set({ isLoading: false, isAuthenticated: false });
+        set({ isLoading: false, isAuthenticated: false, hasLoadedOnce: true });
         return;
       }
+
+      // Set authenticated state immediately if token exists
+      set({ token, isAuthenticated: true });
+
       const res = await authService.getMe();
+      console.log('loadUser: user data loaded', res.user?.username);
       socketService.connect(token);
-      set({ user: res.user, token, isAuthenticated: true, isLoading: false });
-    } catch {
-      await authService.logout();
-      set({ user: null, token: null, isAuthenticated: false, isLoading: false });
+      set({ user: res.user, token, isAuthenticated: true, isLoading: false, hasLoadedOnce: true });
+    } catch (err) {
+      console.error('loadUser error:', err);
+      // If API call fails but we have a token, keep the user authenticated
+      // This prevents logout on network issues
+      const token = await authService.getToken();
+      if (token) {
+        set({ token, isAuthenticated: true, isLoading: false, hasLoadedOnce: true });
+      } else {
+        await authService.logout();
+        set({ user: null, token: null, isAuthenticated: false, isLoading: false, hasLoadedOnce: true });
+      }
     }
   },
 

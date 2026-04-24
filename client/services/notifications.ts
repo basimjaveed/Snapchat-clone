@@ -9,6 +9,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -20,40 +22,45 @@ export const registerForPushNotificationsAsync = async () => {
     return null;
   }
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+  try {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
 
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
 
-  if (finalStatus !== 'granted') {
-    console.log('Failed to get push token for push notification!');
+    if (finalStatus !== 'granted') {
+      console.log('Failed to get push token for push notification!');
+      return null;
+    }
+
+    const token = (await Notifications.getExpoPushTokenAsync({
+      projectId: 'snapchat-clone-project',
+    })).data;
+
+    console.log('Expo Push Token:', token);
+
+    // Save the token to the backend
+    try {
+      await api.put('/users/profile', { pushToken: token });
+    } catch (error) {
+      console.error('Error saving push token to backend:', error);
+    }
+
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FFFC00',
+      });
+    }
+
+    return token;
+  } catch (error) {
+    console.log('Push notifications not supported in this environment:', error);
     return null;
   }
-
-  const token = (await Notifications.getExpoPushTokenAsync({
-    projectId: undefined, // Replace with your Expo Project ID in app.json if needed
-  })).data;
-
-  console.log('Expo Push Token:', token);
-
-  // Save the token to the backend
-  try {
-    await api.put('/users/profile', { pushToken: token });
-  } catch (error) {
-    console.error('Error saving push token to backend:', error);
-  }
-
-  if (Platform.OS === 'android') {
-    Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FFFC00',
-    });
-  }
-
-  return token;
 };

@@ -1,4 +1,5 @@
 const Snap = require('../models/Snap');
+const User = require('../models/User');
 const cloudinary = require('../config/cloudinary');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');

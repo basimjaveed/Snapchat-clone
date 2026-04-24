@@ -2,10 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, Platform, FlatList } from 'react-native';
 import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 import ARCamera from '../../components/ARCamera';
-import { useCameraPermission as useVisionCameraPermission } from 'react-native-vision-camera';
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -25,12 +25,10 @@ export default function CameraScreen() {
   ];
 
   if (!permission) {
-    // Camera permissions are still loading.
     return <View style={styles.container} />;
   }
 
   if (!permission.granted) {
-    // Camera permissions are not granted yet.
     return (
       <View style={styles.container}>
         <Text style={styles.message}>We need your permission to show the camera</Text>
@@ -43,12 +41,12 @@ export default function CameraScreen() {
 
   const takePicture = async () => {
     if (cameraRef.current) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.7,
         base64: false,
       });
       if (photo) {
-        // Navigate to preview with the image URI
         router.push({
           pathname: '/snap/preview',
           params: { 
@@ -63,6 +61,7 @@ export default function CameraScreen() {
   };
 
   const toggleCameraFacing = () => {
+    Haptics.selectionAsync();
     setFacing(current => (current === 'back' ? 'front' : 'back'));
   };
 
@@ -113,7 +112,10 @@ export default function CameraScreen() {
                       styles.filterItem,
                       activeFilter === item.id && styles.filterItemActive
                     ]}
-                    onPress={() => setActiveFilter(item.id)}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setActiveFilter(item.id);
+                    }}
                   >
                     <View style={[styles.filterThumb, { backgroundColor: item.color || '#fff' }]}>
                       <Ionicons 

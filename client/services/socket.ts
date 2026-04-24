@@ -5,14 +5,19 @@ let socket: Socket | null = null;
 
 export const socketService = {
   connect(token: string): Socket {
-    if (socket?.connected) return socket;
+    if (socket?.connected) {
+      console.log('Socket already connected, reusing existing connection');
+      return socket;
+    }
 
     socket = io(SOCKET_URL, {
       auth: { token },
       transports: ['websocket'],
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      timeout: 30000,
     });
 
     socket.on('connect', () => {
