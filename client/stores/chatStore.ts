@@ -56,6 +56,7 @@ interface ChatState {
   deleteConversation: (conversationId: string) => Promise<void>;
   clearMessages: () => void;
   updateConversationLastMessage: (message: Message) => void;
+  initializeSocket: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -253,4 +254,56 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearMessages: () => set({ activeMessages: [], activeConversationId: null, nextCursor: null, hasMoreMessages: false }),
+
+  initializeSocket: () => {
+    const socket = socketService.getSocket();
+    if (!socket) return;
+
+    // Listen for new messages
+    socket.on('receive_message', (message: Message) => {
+      get().receiveMessage(message);
+    });
+
+    // Listen for typing status
+    socket.on('user_typing', (data: { userId: string, isTyping: boolean }) => {
+      get().setTyping(data.userId, data.isTyping);
+    });
+
+    // Listen for message read updates
+    socket.on('message_read', (data: { conversationId: string, readerId: string }) => {
+      set((state) => ({
+        activeMessages: state.activeMessages.map(m => 
+          m.conversationId === data.conversationId && m.sender._id !== data.readerId
+            ? { ...m, read: true, readAt: new Date().toISOString() }
+            : m
+        )
+      }));
+    });
+
+    // Listen for deleted messages
+    socket.on('message_deleted', ({ messageId, conversationId }: { messageId: string, conversationId: string }) => {
+      get().removeMessage(messageId, conversationId);
+    });
+
+    // Listen for conversation cleared
+    socket.on('conversation_cleared', ({ conversationId }: { conversationId: string }) => {
+      if (get().activeConversationId === conversationId) {
+        set({ activeMessages: [] });
+      }
+      set((state) => ({
+        conversations: state.conversations.map(c => 
+          c.conversationId === conversationId ? { ...c, lastMessage: null, unreadCount: 0 } : c
+        )
+      }));
+    });
+
+    // Listen for online status updates for chat list
+    socket.on('user_online', ({ userId }: { userId: string }) => {
+      get().updateConversationOnline(userId, true);
+    });
+
+    socket.on('user_offline', ({ userId, lastSeen }: { userId: string, lastSeen: string }) => {
+      get().updateConversationOnline(userId, false, lastSeen);
+    });
+  },
 }));

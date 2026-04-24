@@ -40,6 +40,7 @@ interface FriendState {
   rejectRequest: (requestId: string) => Promise<void>;
   removeFriend: (friendId: string) => Promise<void>;
   setFriendOnline: (userId: string, isOnline: boolean, lastSeen?: string) => void;
+  initializeSocket: () => void;
 }
 
 export const useFriendStore = create<FriendState>((set, get) => ({
@@ -150,5 +151,43 @@ export const useFriendStore = create<FriendState>((set, get) => ({
         String(f._id) === String(userId) ? { ...f, isOnline, lastSeen: lastSeen || f.lastSeen } : f
       ),
     }));
+  },
+
+  initializeSocket: () => {
+    const socket = socketService.getSocket();
+    if (!socket) return;
+
+    // Listen for new friend requests
+    socket.on('friend_request_received', (data: { from: Friend }) => {
+      console.log('📬 New friend request received from:', data.from.username);
+      set((state) => ({
+        pendingRequests: [{
+          _id: Math.random().toString(), // Temp ID until refresh
+          sender: data.from,
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        }, ...state.pendingRequests]
+      }));
+    });
+
+    // Listen for accepted requests
+    socket.on('friend_request_accepted', (data: { by: Friend }) => {
+      console.log('✅ Friend request accepted by:', data.by.username);
+      set((state) => ({
+        friends: [data.by, ...state.friends],
+        searchResults: state.searchResults.map(u => 
+          u._id === data.by._id ? { ...u, friendStatus: 'friends' } : u
+        )
+      }));
+    });
+
+    // Listen for online status updates
+    socket.on('user_online', (data: { userId: string, lastSeen?: string }) => {
+      get().setFriendOnline(data.userId, true, data.lastSeen);
+    });
+
+    socket.on('user_offline', (data: { userId: string, lastSeen: string }) => {
+      get().setFriendOnline(data.userId, false, data.lastSeen);
+    });
   },
 }));

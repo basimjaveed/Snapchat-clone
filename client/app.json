@@ -7,13 +7,19 @@
     "userInterfaceStyle": "dark",
     "scheme": "snapclone",
     "sdkVersion": "54.0.0",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.snapclone.app"
     },
     "android": {
-      "package": "com.snapclone.app"
+      "package": "com.snapclone.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -37,6 +43,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "cee19259-0980-4857-806b-6c6386590839"
+      }
     }
   }
 }

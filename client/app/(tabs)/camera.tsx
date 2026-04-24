@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, Platform, FlatList } from 'react-native';
 import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,8 +9,9 @@ import ARCamera from '../../components/ARCamera';
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [facing, setFacing] = useState<'back' | 'front'>('front');
   const [activeFilter, setActiveFilter] = useState('none');
+  const [zoom, setZoom] = useState(0);
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
 
@@ -41,21 +42,26 @@ export default function CameraScreen() {
 
   const takePicture = async () => {
     if (cameraRef.current) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
-        base64: false,
-      });
-      if (photo) {
-        router.push({
-          pathname: '/snap/preview',
-          params: { 
-            uri: photo.uri, 
-            type: 'image',
-            filter: activeFilter,
-            isMirrored: facing === 'front' ? 'true' : 'false'
-          }
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.7,
+          base64: false,
         });
+        
+        if (photo) {
+          router.push({
+            pathname: '/snap/preview',
+            params: { 
+              uri: photo.uri, 
+              type: 'image',
+              filter: activeFilter,
+              isMirrored: facing === 'front' ? 'true' : 'false'
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Failed to take photo', e);
       }
     }
   };
@@ -68,26 +74,32 @@ export default function CameraScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.cameraContainer}>
-        {activeFilter === 'squish' ? (
-          <ARCamera />
-        ) : (
-          <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-            {/* Live Filter Overlay */}
-            <View 
-              style={[
-                styles.filterOverlay, 
-                { backgroundColor: FILTERS.find(f => f.id === activeFilter)?.color }
-              ]} 
-            />
+        <CameraView 
+          style={styles.camera} 
+          facing={facing} 
+          ref={cameraRef}
+          zoom={zoom}
+        >
+          {/* Live Filter Overlay */}
+          <View 
+            style={[
+              styles.filterOverlay, 
+              { backgroundColor: FILTERS.find(f => f.id === activeFilter)?.color }
+            ]} 
+          />
 
-            {/* Frame Filter */}
-            {activeFilter === 'frame' && (
-              <View style={styles.frameOverlay}>
-                <View style={styles.whiteFrame} />
-              </View>
-            )}
-          </CameraView>
-        )}
+          {/* Frame Filter */}
+          {activeFilter === 'frame' && (
+            <View style={styles.frameOverlay}>
+              <View style={styles.whiteFrame} />
+            </View>
+          )}
+
+          {/* AR Lens Overlay (Live Mode) */}
+          {activeFilter === 'squish' && (
+            <ARCamera isLive={true} onZoomChange={setZoom} currentZoom={zoom} />
+          )}
+        </CameraView>
         
         <SafeAreaView style={styles.overlay} pointerEvents="box-none">
           <View style={styles.topBar}>
@@ -248,9 +260,6 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: '#fff',
-  },
-  spacer: {
-    flex: 1,
   },
   permissionBtn: {
     backgroundColor: COLORS.primary,

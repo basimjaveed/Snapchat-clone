@@ -4,8 +4,7 @@ import { COLORS } from '../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
-// PURE WEBGL Implementation (Firewall Safe, No Skia dependencies on Web)
-const FRAGMENT_SHADER = `
+const FRAGMENT_SHADER_WEB = `
   precision highp float;
   varying vec2 vUv;
   uniform sampler2D uImage;
@@ -35,16 +34,14 @@ const FRAGMENT_SHADER = `
 
   void main() {
     vec2 uv = vUv;
-    // Apply Eye Bulge (Exact same math as mobile)
     uv = distort(uv, uLeftEye, 0.15, 0.4);
     uv = distort(uv, uRightEye, 0.15, 0.4);
-    // Apply Mouth Stretch
     uv = smile(uv, uMouth, 0.25, 0.08);
     gl_FragColor = texture2D(uImage, uv);
   }
 `;
 
-const VERTEX_SHADER = `
+const VERTEX_SHADER_WEB = `
   attribute vec2 aPosition;
   varying vec2 vUv;
   void main() {
@@ -66,10 +63,7 @@ export default function ARCamera() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const gl = canvas.getContext('webgl');
-    if (!gl) {
-      console.error("WebGL not supported");
-      return;
-    }
+    if (!gl) return;
 
     const createShader = (gl: any, type: any, source: string) => {
       const s = gl.createShader(type);
@@ -79,8 +73,8 @@ export default function ARCamera() {
     };
 
     const program = gl.createProgram();
-    gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER));
-    gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER));
+    gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER_WEB));
+    gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER_WEB));
     gl.linkProgram(program);
     gl.useProgram(program);
 
@@ -115,11 +109,10 @@ export default function ARCamera() {
   }, []);
 
   const onMouseMove = (e: any) => {
-    // Extract coordinates safely for web testing
     const { locationX, locationY } = e.nativeEvent;
     uniformsRef.current = {
-      leftEye: [(locationX / width) - 0.08, locationY / height],
-      rightEye: [(locationX / width) + 0.08, locationY / height],
+      leftEye: [locationX / width - 0.08, locationY / height],
+      rightEye: [locationX / width + 0.08, locationY / height],
       mouth: [locationX / width, (locationY / height) + 0.12],
     };
   };
@@ -143,7 +136,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   header: { 
     position: 'absolute', 
-    top: 60, 
+    top: 100, 
     left: 0, 
     right: 0, 
     alignItems: 'center', 
