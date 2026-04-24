@@ -53,7 +53,9 @@ interface ChatState {
   updateConversationOnline: (userId: string, isOnline: boolean, lastSeen?: string) => void;
   removeMessage: (messageId: string, conversationId: string) => void;
   clearConversation: (conversationId: string) => Promise<void>;
+  deleteConversation: (conversationId: string) => Promise<void>;
   clearMessages: () => void;
+  updateConversationLastMessage: (message: Message) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -111,7 +113,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
             resolve(ack.message);
           } else {
             console.warn('Socket send failed, falling back to REST');
-            this?.fallbackSendMessage(receiverId, text).then(resolve).catch(reject);
+            api.post('/chat/messages', { receiverId, text }).then(res => {
+               set((state) => ({ activeMessages: [...state.activeMessages, res.data.message] }));
+               get().updateConversationLastMessage(res.data.message);
+               resolve(res.data.message);
+            }).catch(reject);
           }
         });
         return;
@@ -131,27 +137,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   receiveMessage: (message) => {
-    const { activeConversationId } = get();
+    console.log('📨 Received live message via socket:', message.text, 'for conv:', message.conversationId);
+    const { conversations, activeConversationId, fetchConversations } = get();
     const isActive = message.conversationId === activeConversationId;
+    console.log('   Is active conversation?', isActive, 'Active ID:', activeConversationId);
+    const existingConv = conversations.find(c => c.conversationId === message.conversationId);
 
-    set((state) => {
-      const updated = {
-        activeMessages: isActive
-          ? [...state.activeMessages, message]
-          : state.activeMessages,
-        conversations: state.conversations.map((c) =>
-          c.conversationId === message.conversationId
-            ? {
-                ...c,
-                lastMessage: message,
-                lastMessageAt: message.createdAt,
-                unreadCount: isActive ? 0 : c.unreadCount + 1,
-              }
-            : c
-        ),
-      };
-      return updated;
-    });
+    if (!existingConv) {
+      console.log('   New conversation detected, refreshing list...');
+      fetchConversations();
+      return;
+    }
+
+    set((state) => ({
+      activeMessages: isActive
+        ? [...state.activeMessages, message]
+        : state.activeMessages,
+      conversations: state.conversations.map((c) =>
+        c.conversationId === message.conversationId
+          ? {
+              ...c,
+              lastMessage: message,
+              lastMessageAt: message.createdAt,
+              unreadCount: isActive ? 0 : c.unreadCount + 1,
+            }
+          : c
+      ),
+    }));
 
     // Auto mark-read if this conversation is active
     if (isActive) {
@@ -224,6 +236,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }));
     } catch (err: any) {
       console.error('Failed to clear conversation:', err);
+      throw err;
+    }
+  },
+
+  deleteConversation: async (conversationId) => {
+    try {
+      await api.delete(`/chat/delete/${conversationId}`);
+      set((state) => ({
+        conversations: state.conversations.filter(c => c.conversationId !== conversationId)
+      }));
+    } catch (err: any) {
+      console.error('Failed to delete conversation:', err);
       throw err;
     }
   },

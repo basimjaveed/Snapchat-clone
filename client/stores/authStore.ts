@@ -14,6 +14,8 @@ interface AuthState {
   login: (data: { email: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
+  updateProfile: (data: { displayName?: string; avatar?: string }) => Promise<void>;
+  deleteAccount: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -84,6 +86,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await authService.logout();
         set({ user: null, token: null, isAuthenticated: false, isLoading: false, hasLoadedOnce: true });
       }
+    }
+  },
+
+  updateProfile: async (data) => {
+    try {
+      const api = require('../services/api').default;
+      const res = await api.put('/users/profile', data);
+      set({ user: res.data.user });
+    } catch (err: any) {
+      set({ error: err.message });
+      throw err;
+    }
+  },
+
+  deleteAccount: async () => {
+    try {
+      const api = require('../services/api').default;
+      await api.delete('/users/me');
+      await get().logout();
+    } catch (err: any) {
+      set({ error: err.message });
+      throw err;
     }
   },
 

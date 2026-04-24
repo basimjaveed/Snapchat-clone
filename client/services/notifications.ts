@@ -36,9 +36,7 @@ export const registerForPushNotificationsAsync = async () => {
       return null;
     }
 
-    const token = (await Notifications.getExpoPushTokenAsync({
-      projectId: 'snapchat-clone-project',
-    })).data;
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
 
     console.log('Expo Push Token:', token);
 

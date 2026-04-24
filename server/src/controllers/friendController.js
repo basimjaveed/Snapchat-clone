@@ -145,4 +145,25 @@ const getPendingRequests = async (req, res, next) => {
   }
 };
 
-module.exports = { sendRequest, acceptRequest, rejectRequest, getFriends, getPendingRequests };
+// DELETE /api/friends/:friendId
+const removeFriend = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { friendId } = req.params;
+    console.log(`👤 Removing friend ${friendId} for user ${userId}`);
+
+    await FriendRequest.deleteMany({
+      $or: [
+        { sender: userId, receiver: friendId },
+        { sender: friendId, receiver: userId },
+      ],
+      status: 'accepted',
+    });
+
+    res.json({ success: true, message: 'Friend removed' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { sendRequest, acceptRequest, rejectRequest, getFriends, getPendingRequests, removeFriend };

@@ -5,7 +5,9 @@ import {
   Text, 
   FlatList, 
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFriendStore } from '../../stores/friendStore';
@@ -59,7 +61,7 @@ export default function FriendsScreen() {
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
-    if (text.length >= 2) {
+    if (text.length >= 1) {
       searchUsers(text);
     } else {
       clearSearch();
@@ -70,53 +72,29 @@ export default function FriendsScreen() {
     await Promise.all([fetchFriends(), fetchPending()]);
   };
 
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <Input
-        placeholder="Search for friends..."
-        value={searchQuery}
-        onChangeText={handleSearch}
-        leftIcon="search-outline"
-        containerStyle={styles.searchBar}
-      />
+  const handleRemoveFriend = (userId: string) => {
+    const friend = friends.find(f => f._id === userId);
+    const confirmRemove = () => {
+      useFriendStore.getState().removeFriend(userId).catch(err => {
+        Alert.alert('Error', 'Failed to remove friend');
+      });
+    };
 
-      {isSearching && (
-        <ActivityIndicator color={COLORS.primary} style={styles.loader} />
-      )}
-
-      {searchResults.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>People</Text>
-          {searchResults.map((user) => (
-            <UserCard 
-              key={user._id} 
-              user={user} 
-              onAddFriend={() => sendRequest(user._id)} 
-              onChat={() => handleChat(user._id)}
-            />
-          ))}
-        </View>
-      )}
-
-      {pendingRequests.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Added Me</Text>
-          {pendingRequests.map((request) => (
-            <FriendRequestCard
-              key={request._id}
-              request={request}
-              onAccept={() => acceptRequest(request._id)}
-              onReject={() => rejectRequest(request._id)}
-            />
-          ))}
-        </View>
-      )}
-
-      {friends.length > 0 && (
-        <Text style={styles.sectionTitle}>My Friends ({friends.length})</Text>
-      )}
-    </View>
-  );
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Are you sure you want to remove ${friend?.displayName || 'this friend'}?`)) {
+        confirmRemove();
+      }
+    } else {
+      Alert.alert(
+        'Remove Friend',
+        `Are you sure you want to remove ${friend?.displayName || 'this friend'}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: confirmRemove }
+        ]
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -127,10 +105,59 @@ export default function FriendsScreen() {
           <UserCard 
             user={{ ...item, friendStatus: 'friends' } as any} 
             onAddFriend={() => {}} 
+            onRemoveFriend={() => handleRemoveFriend(item._id)}
             onChat={() => handleChat(item._id)}
           />
         )}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <Input
+              placeholder="Search for friends..."
+              value={searchQuery}
+              onChangeText={handleSearch}
+              leftIcon="search-outline"
+              containerStyle={styles.searchBar}
+            />
+
+            {isSearching && (
+              <ActivityIndicator color={COLORS.primary} style={styles.loader} />
+            )}
+
+            {searchResults.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>People</Text>
+                {searchResults
+                  .filter(user => !friends.some(f => f._id === user._id))
+                  .map((user) => (
+                  <UserCard 
+                    key={user._id} 
+                    user={user} 
+                    onAddFriend={() => sendRequest(user._id)} 
+                    onChat={() => handleChat(user._id)}
+                  />
+                ))}
+              </View>
+            )}
+
+            {pendingRequests.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Added Me</Text>
+                {pendingRequests.map((request) => (
+                  <FriendRequestCard
+                    key={request._id}
+                    request={request}
+                    onAccept={() => acceptRequest(request._id)}
+                    onReject={() => rejectRequest(request._id)}
+                  />
+                ))}
+              </View>
+            )}
+
+            {friends.length > 0 && (
+              <Text style={styles.sectionTitle}>My Friends ({friends.length})</Text>
+            )}
+          </View>
+        }
         ListEmptyComponent={
           !isLoading && friends.length === 0 && searchResults.length === 0 && pendingRequests.length === 0 ? (
             <View style={styles.emptyContainer}>

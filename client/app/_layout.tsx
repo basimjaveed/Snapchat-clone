@@ -21,58 +21,27 @@ export default function RootLayout() {
 
   const segments = useSegments();
   const router = useRouter();
-  const lastRoute = useRef<string | null>(null);
-  const isCheckingAuth = useRef(false);
 
   useEffect(() => {
     loadUser();
   }, []);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || !hasLoadedOnce) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const currentRoute = segments.join('/');
-    console.log('Routing check:', { isAuthenticated, inAuthGroup, segments, hasLoadedOnce, currentRoute, lastRoute: lastRoute.current });
+    
+    console.log('Routing check:', { isAuthenticated, inAuthGroup, currentRoute });
 
-    // Only redirect if we've completed the initial load check
-    if (!hasLoadedOnce) return;
-
-    // Prevent rapid redirects
-    if (isCheckingAuth.current) return;
-
-    // Check if user has a token - if yes, they should be considered authenticated
-    const checkAuth = async () => {
-      isCheckingAuth.current = true;
-      const storedToken = await authService.getToken();
-      console.log('Stored token check:', !!storedToken);
-      
-      // Only redirect if the current route doesn't match the expected route
-      // AND we're not already on the correct route
-      if (!storedToken && !inAuthGroup) {
-        const targetRoute = '(auth)/login';
-        if (lastRoute.current !== targetRoute) {
-          console.log('Redirecting to login (no token)');
-          lastRoute.current = targetRoute;
-          router.replace('/(auth)/login');
-        }
-      } else if (storedToken && inAuthGroup) {
-        const targetRoute = '(tabs)/chat';
-        if (lastRoute.current !== targetRoute) {
-          console.log('Redirecting to chat (has token)');
-          lastRoute.current = targetRoute;
-          router.replace('/(tabs)/chat');
-        }
-      } else {
-        // Update last route to current if no redirect needed
-        lastRoute.current = currentRoute;
-      }
-      
-      isCheckingAuth.current = false;
-    };
-
-    checkAuth();
-  }, [isLoading, segments, hasLoadedOnce]);
+    if (!isAuthenticated && !inAuthGroup) {
+      console.log('Redirecting to login (unauthenticated)');
+      router.replace('/(auth)/login');
+    } else if (isAuthenticated && inAuthGroup) {
+      console.log('Redirecting to chat (authenticated)');
+      router.replace('/(tabs)/chat');
+    }
+  }, [isLoading, segments, hasLoadedOnce, isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated && token) {
@@ -108,13 +77,8 @@ export default function RootLayout() {
         setTyping(userId, false);
       });
 
-      socket.on('new_snap', ({ snap }) => {
-        const { addReceivedSnap } = require('../stores/snapStore').useSnapStore.getState();
-        addReceivedSnap(snap);
-      });
-
       socket.on('friend_request_received', () => {
-        // We could fetch pending requests here
+        useFriendStore.getState().fetchPending();
       });
       
       socket.on('conversation_cleared', ({ conversationId }) => {

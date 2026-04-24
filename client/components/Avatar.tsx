@@ -5,14 +5,17 @@ import { COLORS, RADIUS } from '../constants/theme';
 interface AvatarProps {
   uri?: string;
   displayName?: string;
+  username?: string;
   size?: number;
   isOnline?: boolean;
   style?: ViewStyle;
 }
 
-export default function Avatar({ uri, displayName = '?', size = 44, isOnline, style }: AvatarProps) {
-  const initials = displayName
+export default function Avatar({ uri, displayName, username, size = 44, isOnline, style }: AvatarProps) {
+  const nameToUse = displayName || username || '?';
+  const initials = nameToUse
     .split(' ')
+    .filter(Boolean)
     .map((w) => w[0])
     .join('')
     .toUpperCase()

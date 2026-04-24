@@ -208,15 +208,18 @@ export default function ChatDetailScreen() {
           headerStyle: { backgroundColor: COLORS.bg },
           headerTitle: () => (
             <View style={styles.headerTitleContainer}>
-              <Avatar uri={activeFriend?.avatar} displayName={activeFriend?.displayName} size={34} isOnline={activeFriend?.isOnline} />
+              <Avatar uri={activeFriend?.avatar} displayName={activeFriend?.displayName} username={activeFriend?.username} size={34} isOnline={activeFriend?.isOnline} />
               <View style={styles.headerTextContainer}>
-                <Text style={styles.headerName}>{activeFriend?.displayName || 'Chat'}</Text>
+                <Text style={styles.headerName}>{activeFriend?.displayName || activeFriend?.username || 'Chat'}</Text>
                 <Text style={styles.headerStatus}>{activeFriend?.isOnline ? 'Online' : 'Offline'}</Text>
               </View>
             </View>
           ),
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.push('/(tabs)/friends')} style={styles.backButton}>
+            <TouchableOpacity 
+              onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/chat')} 
+              style={styles.backButton}
+            >
               <Ionicons name="chevron-back" size={28} color={COLORS.primary} />
             </TouchableOpacity>
           ),
@@ -275,6 +278,7 @@ export default function ChatDetailScreen() {
             placeholder="Type a message..."
             placeholderTextColor={COLORS.textMuted}
             multiline
+            autoFocus={true}
             onKeyPress={handleKeyPress}
             blurOnSubmit={false}
           />

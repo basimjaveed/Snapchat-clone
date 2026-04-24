@@ -22,12 +22,13 @@ const searchUsers = async (req, res, next) => {
     const currentUserId = req.user._id;
     const enriched = await Promise.all(
       users.map(async (u) => {
+        // Prioritize 'accepted' status if multiple requests exist
         const request = await FriendRequest.findOne({
           $or: [
             { sender: currentUserId, receiver: u._id },
             { sender: u._id, receiver: currentUserId },
           ],
-        });
+        }).sort({ status: 1 }); // 'accepted' comes before 'pending' alphabetically
 
         let friendStatus = 'none';
         if (request) {
@@ -75,4 +76,29 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
-module.exports = { searchUsers, getUserProfile, updateProfile };
+// DELETE /api/users/me
+const deleteAccount = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    console.log(`🧨 Deleting account for user ${userId}`);
+
+    // 1. Delete user from DB
+    await User.findByIdAndDelete(userId);
+
+    // 2. Cleanup related data
+    await FriendRequest.deleteMany({ $or: [{ sender: userId }, { receiver: userId }] });
+    const Conversation = require('../models/Conversation');
+    const Message = require('../models/Message');
+    const Snap = require('../models/Snap');
+
+    await Conversation.deleteMany({ participants: userId });
+    await Message.deleteMany({ $or: [{ sender: userId }, { receiver: userId }] });
+    await Snap.deleteMany({ $or: [{ sender: userId }, { receiver: userId }] });
+
+    res.json({ success: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { searchUsers, getUserProfile, updateProfile, deleteAccount };

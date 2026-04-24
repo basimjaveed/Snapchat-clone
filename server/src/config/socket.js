@@ -23,9 +23,11 @@ const initSocket = (io, onlineUsers) => {
 
   io.on('connection', async (socket) => {
     const userId = socket.user._id.toString();
-    console.log(`🟢 User connected: ${socket.user.username} (${userId})`);
+    const userName = socket.user.displayName || socket.user.username || 'Unknown User';
+    console.log(`🟢 User connected: ${userName} (${userId})`);
 
-    // Track online users
+    // Join a room specific to this user ID for multi-device support
+    socket.join(userId);
     onlineUsers.set(userId, socket.id);
 
     // Mark user online in DB
@@ -46,12 +48,13 @@ const initSocket = (io, onlineUsers) => {
           return ack?.({ success: false, message: 'Invalid message data' });
         }
 
-        const conversationId = Message.getConversationId(userId, receiverId);
+        const receiverIdStr = receiverId.toString();
+        const conversationId = Message.getConversationId(userId, receiverIdStr);
 
         const message = await Message.create({
           conversationId,
           sender: socket.user._id,
-          receiver: receiverId,
+          receiver: receiverIdStr,
           text: text.trim(),
         });
 
@@ -62,19 +65,17 @@ const initSocket = (io, onlineUsers) => {
           { conversationId },
           {
             conversationId,
-            participants: [userId, receiverId],
+            participants: [userId, receiverIdStr],
             lastMessage: message._id,
             lastMessageAt: message.createdAt,
-            $inc: { [`unreadCount.${receiverId}`]: 1 },
+            $inc: { [`unreadCount.${receiverIdStr}`]: 1 },
           },
           { upsert: true, new: true }
         );
 
-        // Deliver to receiver if online
-        const receiverSocketId = onlineUsers.get(receiverId);
-        if (receiverSocketId) {
-          io.to(receiverSocketId).emit('new_message', { message });
-        }
+        // Deliver to receiver's room (handles multiple devices)
+        console.log(`📡 Emitting 'new_message' to room ${receiverIdStr}`);
+        io.to(receiverIdStr).emit('new_message', { message });
 
         // Ack back to sender with saved message
         ack?.({ success: true, message });
@@ -86,25 +87,24 @@ const initSocket = (io, onlineUsers) => {
 
     // Typing indicators
     socket.on('typing', ({ receiverId }) => {
-      const receiverSocketId = onlineUsers.get(receiverId);
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit('user_typing', {
-          userId,
-          username: socket.user.username,
-        });
-      }
+      if (!receiverId) return;
+      io.to(receiverId.toString()).emit('user_typing', {
+        userId,
+        username: socket.user.displayName || socket.user.username || 'Someone',
+      });
     });
 
     socket.on('stop_typing', ({ receiverId }) => {
-      const receiverSocketId = onlineUsers.get(receiverId);
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit('user_stop_typing', { userId });
-      }
+      if (!receiverId) return;
+      io.to(receiverId.toString()).emit('user_stop_typing', { userId });
     });
 
     // Mark messages as read: { conversationId, senderId }
     socket.on('mark_read', async ({ conversationId, senderId }) => {
       try {
+        if (!conversationId || !senderId) return;
+        
+        const senderIdStr = senderId.toString();
         await Message.updateMany(
           { conversationId, receiver: socket.user._id, read: false },
           { read: true, readAt: new Date() }
@@ -114,11 +114,8 @@ const initSocket = (io, onlineUsers) => {
           { $set: { [`unreadCount.${userId}`]: 0 } }
         );
 
-        // Notify sender that messages are read
-        const senderSocketId = onlineUsers.get(senderId);
-        if (senderSocketId) {
-          io.to(senderSocketId).emit('messages_read', { conversationId, readBy: userId });
-        }
+        // Notify sender's room that messages are read
+        io.to(senderIdStr).emit('messages_read', { conversationId, readBy: userId });
       } catch (error) {
         console.error('mark_read error:', error);
       }
@@ -128,15 +125,18 @@ const initSocket = (io, onlineUsers) => {
     // DISCONNECT
     // ────────────────────────────────────────────
     socket.on('disconnect', async () => {
-      console.log(`🔴 User disconnected: ${socket.user.username}`);
-      onlineUsers.delete(userId);
-
-      await User.findByIdAndUpdate(userId, {
-        isOnline: false,
-        lastSeen: new Date(),
-      });
-
-      socket.broadcast.emit('user_offline', { userId, lastSeen: new Date() });
+      console.log(`🔴 User disconnected: ${userName}`);
+      
+      // Only delete from map if this was the last active socket for this user
+      const room = io.sockets.adapter.rooms.get(userId);
+      if (!room || room.size === 0) {
+        onlineUsers.delete(userId);
+        await User.findByIdAndUpdate(userId, {
+          isOnline: false,
+          lastSeen: new Date(),
+        });
+        socket.broadcast.emit('user_offline', { userId, lastSeen: new Date() });
+      }
     });
   });
 };

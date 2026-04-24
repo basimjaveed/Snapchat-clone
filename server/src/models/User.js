@@ -84,14 +84,14 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 userSchema.methods.toPublicJSON = function () {
   return {
     _id: this._id,
-    username: this.username,
-    email: this.email,
-    displayName: this.displayName,
-    avatar: this.avatar,
-    isOnline: this.isOnline,
-    lastSeen: this.lastSeen,
-    snapScore: this.snapScore,
-    createdAt: this.createdAt,
+    username: this.username || 'unknown',
+    email: this.email || '',
+    displayName: this.displayName || this.username || 'Unknown User',
+    avatar: this.avatar || '',
+    isOnline: this.isOnline || false,
+    lastSeen: this.lastSeen || new Date(),
+    snapScore: this.snapScore || 0,
+    createdAt: this.createdAt || new Date(),
   };
 };
 

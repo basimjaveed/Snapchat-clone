@@ -7,7 +7,6 @@
     "userInterfaceStyle": "dark",
     "scheme": "snapclone",
     "sdkVersion": "54.0.0",
-    "projectId": "snapchat-clone-project",
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,

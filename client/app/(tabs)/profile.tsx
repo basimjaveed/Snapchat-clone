@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, TextInput, Platform } from 'react-native';
 import { useAuthStore } from '../../stores/authStore';
 import Avatar from '../../components/Avatar';
 import Button from '../../components/Button';
@@ -7,17 +7,86 @@ import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateProfile, deleteAccount } = useAuthStore();
+  const [isEditing, setIsEditing] = useState(false);
+  const [newName, setNewName] = useState(user?.displayName || '');
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleLogout = () => {
     logout();
+  };
+
+  const handleUpdateName = async () => {
+    if (!newName.trim() || newName === user?.displayName) {
+      setIsEditing(false);
+      return;
+    }
+    
+    try {
+      setIsSaving(true);
+      await updateProfile({ displayName: newName.trim() });
+      setIsEditing(false);
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to update name: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    const confirmDelete = () => {
+      deleteAccount().catch(err => Alert.alert('Error', 'Failed to delete account'));
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('WARNING: Are you sure you want to delete your account? This action cannot be undone.')) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Account',
+        'Are you sure you want to delete your account? This will remove all your messages, friends, and data. This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete Permanently', style: 'destructive', onPress: confirmDelete }
+        ]
+      );
+    }
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Avatar uri={user?.avatar} displayName={user?.displayName} size={100} />
-        <Text style={styles.displayName}>{user?.displayName}</Text>
+        
+        {isEditing ? (
+          <View style={styles.editContainer}>
+            <TextInput
+              style={styles.nameInput}
+              value={newName}
+              onChangeText={setNewName}
+              placeholder="Display Name"
+              placeholderTextColor={COLORS.textMuted}
+              autoFocus
+            />
+            <View style={styles.editButtons}>
+              <TouchableOpacity onPress={() => setIsEditing(false)} style={styles.cancelBtn}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleUpdateName} style={styles.saveBtn} disabled={isSaving}>
+                <Text style={styles.saveText}>{isSaving ? 'Saving...' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.nameContainer}>
+            <Text style={styles.displayName}>{user?.displayName}</Text>
+            <TouchableOpacity onPress={() => { setNewName(user?.displayName || ''); setIsEditing(true); }}>
+              <Ionicons name="pencil" size={18} color={COLORS.primary} style={styles.editIcon} />
+            </TouchableOpacity>
+          </View>
+        )}
+        
         <Text style={styles.username}>@{user?.username}</Text>
       </View>
 
@@ -36,20 +105,12 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>App Preferences</Text>
-        <TouchableOpacity style={styles.prefItem}>
-          <View style={styles.prefLeft}>
-            <Ionicons name="moon-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.prefText}>Dark Mode</Text>
+        <Text style={styles.sectionTitle}>Danger Zone</Text>
+        <TouchableOpacity style={[styles.infoCard, { borderColor: COLORS.danger + '44' }]} onPress={handleDeleteAccount}>
+          <View style={styles.infoItem}>
+            <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+            <Text style={[styles.infoText, { color: COLORS.danger }]}>Delete Account Permanently</Text>
           </View>
-          <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.prefItem}>
-          <View style={styles.prefLeft}>
-            <Ionicons name="notifications-outline" size={20} color={COLORS.textSecondary} />
-            <Text style={styles.prefText}>Notifications</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -58,10 +119,10 @@ export default function ProfileScreen() {
         onPress={handleLogout}
         variant="ghost"
         style={styles.logoutBtn}
-        textStyle={{ color: COLORS.danger }}
+        textStyle={{ color: COLORS.textSecondary }}
       />
       
-      <Text style={styles.version}>SnapClone v1.0.0 (Phase 1+2)</Text>
+      <Text style={styles.version}>SnapClone v1.1.0</Text>
     </ScrollView>
   );
 }
@@ -79,11 +140,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.xxl,
   },
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING.md,
+  },
   displayName: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
+  },
+  editIcon: {
+    marginLeft: SPACING.sm,
+  },
+  editContainer: {
+    alignItems: 'center',
     marginTop: SPACING.md,
+    width: '100%',
+  },
+  nameInput: {
+    backgroundColor: COLORS.bgInput,
+    color: COLORS.textPrimary,
+    fontSize: FONTS.sizes.xl,
+    fontWeight: 'bold',
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    width: '80%',
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  editButtons: {
+    flexDirection: 'row',
+    marginTop: SPACING.sm,
+  },
+  saveBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.sm,
+    marginLeft: SPACING.sm,
+  },
+  saveText: {
+    color: COLORS.bg,
+    fontWeight: 'bold',
+  },
+  cancelBtn: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+  },
+  cancelText: {
+    color: COLORS.textSecondary,
   },
   username: {
     fontSize: FONTS.sizes.md,
@@ -118,29 +225,9 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.md,
     marginLeft: SPACING.md,
   },
-  prefItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  prefLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  prefText: {
-    color: COLORS.textPrimary,
-    fontSize: FONTS.sizes.md,
-    marginLeft: SPACING.md,
-  },
   logoutBtn: {
     marginTop: SPACING.xl,
-    borderColor: COLORS.danger + '22',
+    borderColor: COLORS.border,
   },
   version: {
     textAlign: 'center',

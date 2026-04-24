@@ -8,10 +8,11 @@ import { COLORS, FONTS, SPACING } from '../constants/theme';
 interface UserCardProps {
   user: SearchUser;
   onAddFriend: (userId: string) => void;
+  onRemoveFriend?: (userId: string) => void;
   onChat?: () => void;
 }
 
-export default function UserCard({ user, onAddFriend, onChat }: UserCardProps) {
+export default function UserCard({ user, onAddFriend, onRemoveFriend, onChat }: UserCardProps) {
   const isFriend = user.friendStatus === 'friends';
   const isPending = user.friendStatus === 'request_received';
   const isSent = user.friendStatus === 'request_sent';
@@ -21,35 +22,44 @@ export default function UserCard({ user, onAddFriend, onChat }: UserCardProps) {
       <Avatar
         uri={user.avatar}
         displayName={user.displayName}
+        username={user.username}
         size={50}
         isOnline={user.isOnline}
       />
       <View style={styles.info}>
-        <Text style={styles.displayName}>{user.displayName}</Text>
+        <Text style={styles.displayName}>{user.displayName || user.username}</Text>
         <Text style={styles.username}>@{user.username}</Text>
       </View>
       
-      {isFriend ? (
-        <TouchableOpacity style={styles.chatButton} onPress={onChat}>
-          <Ionicons name="chatbubble-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.chatButtonText}>Chat</Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity 
-          style={[styles.addButton, (isPending || isSent) && styles.pendingButton]} 
-          onPress={() => onAddFriend(user._id)}
-          disabled={isSent}
-        >
-          <Ionicons 
-            name={isPending ? "person-add" : isSent ? "time-outline" : "person-add-outline"} 
-            size={18} 
-            color={isPending || isSent ? COLORS.textSecondary : COLORS.bg} 
-          />
-          <Text style={[styles.addButtonText, (isPending || isSent) && styles.pendingText]}>
-            {isPending ? 'Accept' : isSent ? 'Pending' : 'Add'}
-          </Text>
-        </TouchableOpacity>
-      )}
+      <View style={styles.actions}>
+        {isFriend ? (
+          <>
+            <TouchableOpacity style={styles.iconAction} onPress={onChat}>
+              <Ionicons name="chatbubble-outline" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+            {onRemoveFriend && (
+              <TouchableOpacity style={styles.iconAction} onPress={() => onRemoveFriend(user._id)}>
+                <Ionicons name="person-remove-outline" size={20} color={COLORS.danger || '#ff4444'} />
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <TouchableOpacity 
+            style={[styles.addButton, (isPending || isSent) && styles.pendingButton]} 
+            onPress={() => onAddFriend(user._id)}
+            disabled={isSent}
+          >
+            <Ionicons 
+              name={isPending ? "person-add" : isSent ? "time-outline" : "person-add-outline"} 
+              size={18} 
+              color={isPending || isSent ? COLORS.textSecondary : COLORS.bg} 
+            />
+            <Text style={[styles.addButtonText, (isPending || isSent) && styles.pendingText]}>
+              {isPending ? 'Accept' : isSent ? 'Pending' : 'Add'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -98,19 +108,12 @@ const styles = StyleSheet.create({
   pendingText: {
     color: COLORS.textSecondary,
   },
-  chatButton: {
+  actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
   },
-  chatButtonText: {
-    color: COLORS.primary,
-    fontWeight: 'bold',
-    fontSize: FONTS.sizes.sm,
-    marginLeft: 4,
+  iconAction: {
+    padding: SPACING.sm,
+    marginLeft: SPACING.xs,
   },
 });

@@ -9,24 +9,20 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useChatStore } from '../../stores/chatStore';
-import { useSnapStore } from '../../stores/snapStore';
 import Avatar from '../../components/Avatar';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ChatScreen() {
   const { conversations, fetchConversations, isLoadingConversations } = useChatStore();
-  const { receivedSnaps, fetchReceivedSnaps, isLoadingSnaps } = useSnapStore();
   const router = useRouter();
 
   useEffect(() => {
     fetchConversations();
-    fetchReceivedSnaps();
   }, []);
 
   const onRefresh = () => {
     fetchConversations();
-    fetchReceivedSnaps();
   };
 
   const getStreakIcon = (streak: any) => {
@@ -70,6 +66,7 @@ export default function ChatScreen() {
         <Avatar 
           uri={item.friend.avatar} 
           displayName={item.friend.displayName} 
+          username={item.friend.username}
           isOnline={item.friend.isOnline}
           size={50}
         />
@@ -100,41 +97,35 @@ export default function ChatScreen() {
             <Text style={styles.badgeText}>{item.unreadCount}</Text>
           </View>
         )}
+        <TouchableOpacity 
+          style={styles.deleteBtn} 
+          onPress={() => {
+            const confirmDelete = () => {
+              useChatStore.getState().deleteConversation(item.conversationId).catch(() => {
+                alert('Failed to delete conversation');
+              });
+            };
+
+            if (require('react-native').Platform.OS === 'web') {
+              if (window.confirm('Delete this conversation?')) confirmDelete();
+            } else {
+              require('react-native').Alert.alert(
+                'Delete Chat',
+                'Are you sure you want to delete this conversation?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: confirmDelete }
+                ]
+              );
+            }
+          }}
+        >
+          <Ionicons name="trash-outline" size={18} color={COLORS.textMuted} />
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
-  const renderSnapsHeader = () => {
-    if (receivedSnaps.length === 0) return null;
-
-    return (
-      <View style={styles.snapsSection}>
-        <Text style={styles.sectionTitle}>New Snaps</Text>
-        <FlatList
-          horizontal
-          data={receivedSnaps}
-          keyExtractor={(item) => item._id}
-          showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <TouchableOpacity 
-              style={styles.snapItem}
-              onPress={() => router.push(`/snap/view?id=${item._id}`)}
-            >
-              <View style={styles.snapAvatarWrapper}>
-                <Avatar uri={item.sender.avatar} displayName={item.sender.displayName} size={60} />
-                <View style={styles.snapBadge}>
-                  <Ionicons name="flash" size={12} color={COLORS.bg} />
-                </View>
-              </View>
-              <Text style={styles.snapSenderName} numberOfLines={1}>{item.sender.displayName}</Text>
-            </TouchableOpacity>
-          )}
-          contentContainerStyle={styles.snapsScrollContent}
-        />
-        <View style={styles.divider} />
-      </View>
-    );
-  };
 
   return (
     <View style={styles.container}>
@@ -142,17 +133,16 @@ export default function ChatScreen() {
         data={conversations}
         keyExtractor={(item) => item._id}
         renderItem={renderConversation}
-        ListHeaderComponent={renderSnapsHeader}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl 
-            refreshing={isLoadingConversations || isLoadingSnaps} 
+            refreshing={isLoadingConversations} 
             onRefresh={onRefresh} 
             tintColor={COLORS.primary}
           />
         }
         ListEmptyComponent={
-          !isLoadingConversations && conversations.length === 0 && receivedSnaps.length === 0 ? (
+          !isLoadingConversations && conversations.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No messages yet. Say hi to a friend!</Text>
             </View>
@@ -170,59 +160,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 20,
-  },
-  snapsSection: {
-    paddingTop: SPACING.md,
-  },
-  sectionTitle: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: 'bold',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  snapsScrollContent: {
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
-  },
-  snapItem: {
-    alignItems: 'center',
-    marginRight: SPACING.lg,
-    width: 70,
-  },
-  snapAvatarWrapper: {
-    position: 'relative',
-    padding: 3,
-    borderRadius: 35,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-  },
-  snapBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: COLORS.primary,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.bg,
-  },
-  snapSenderName: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    marginTop: 6,
-    fontWeight: '500',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginHorizontal: SPACING.md,
-    marginVertical: SPACING.sm,
   },
   conversationItem: {
     flexDirection: 'row',
@@ -292,6 +229,10 @@ const styles = StyleSheet.create({
     color: COLORS.bg,
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  deleteBtn: {
+    padding: SPACING.sm,
+    marginLeft: SPACING.xs,
   },
   emptyContainer: {
     alignItems: 'center',

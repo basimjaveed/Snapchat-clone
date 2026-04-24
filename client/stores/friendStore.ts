@@ -38,6 +38,7 @@ interface FriendState {
   sendRequest: (receiverId: string) => Promise<void>;
   acceptRequest: (requestId: string) => Promise<void>;
   rejectRequest: (requestId: string) => Promise<void>;
+  removeFriend: (friendId: string) => Promise<void>;
   setFriendOnline: (userId: string, isOnline: boolean, lastSeen?: string) => void;
 }
 
@@ -69,7 +70,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   },
 
   searchUsers: async (query) => {
-    if (!query.trim() || query.trim().length < 2) {
+    if (!query.trim()) {
       set({ searchResults: [] });
       return;
     }
@@ -103,10 +104,15 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     try {
       await api.put(`/friends/accept/${requestId}`);
       const accepted = get().pendingRequests.find((r) => r._id === requestId);
-      set((state) => ({
-        pendingRequests: state.pendingRequests.filter((r) => r._id !== requestId),
-        friends: accepted ? [...state.friends, accepted.sender] : state.friends,
-      }));
+      if (accepted) {
+        set((state) => ({
+          pendingRequests: state.pendingRequests.filter((r) => r._id !== requestId),
+          friends: [...state.friends, accepted.sender],
+          searchResults: state.searchResults.map(u => 
+            u._id === accepted.sender._id ? { ...u, friendStatus: 'friends' } : u
+          )
+        }));
+      }
     } catch (err: any) {
       set({ error: err.message });
     }
@@ -120,6 +126,21 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       }));
     } catch (err: any) {
       set({ error: err.message });
+    }
+  },
+
+  removeFriend: async (friendId) => {
+    try {
+      await api.delete(`/friends/unfriend/${friendId}`);
+      set((state) => ({
+        friends: state.friends.filter((f) => f._id !== friendId),
+        searchResults: state.searchResults.map(u => 
+          u._id === friendId ? { ...u, friendStatus: 'none' } : u
+        )
+      }));
+    } catch (err: any) {
+      set({ error: err.message });
+      throw err;
     }
   },
 

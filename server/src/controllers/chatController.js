@@ -27,12 +27,23 @@ const getConversations = async (req, res, next) => {
       .sort('-lastMessageAt');
 
     const formatted = conversations.map((conv) => {
-      const other = conv.participants.find((p) => !p._id.equals(userId));
+      // Ensure we only look at valid populated participants
+      const validParticipants = conv.participants.filter(p => p && p._id);
+      
+      // Try to find the OTHER participant
+      let other = validParticipants.find((p) => p._id.toString() !== userId.toString());
+      
+      // Fallback: if it's a conversation with self or other is missing, 
+      // use the first participant or a dummy object
+      if (!other && validParticipants.length > 0) {
+        other = validParticipants[0];
+      }
+
       const unread = conv.unreadCount?.get(userId.toString()) || 0;
       return {
         _id: conv._id,
         conversationId: conv.conversationId,
-        friend: other,
+        friend: other || { displayName: 'Unknown User', username: 'unknown' },
         lastMessage: conv.lastMessage,
         lastMessageAt: conv.lastMessageAt,
         unreadCount: unread,
@@ -192,4 +203,22 @@ const clearConversation = async (req, res, next) => {
   }
 };
 
-module.exports = { getConversations, getMessages, sendMessage, clearConversation };
+// DELETE /api/chat/conversations/:conversationId
+const deleteConversation = async (req, res, next) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user._id;
+    console.log(`🗑️ Deleting conversation ${conversationId} for user ${userId}`);
+
+    // We can either delete the whole conversation or just "hide" it for this user.
+    // For simplicity, we delete the conversation record and all messages.
+    await Conversation.findOneAndDelete({ conversationId, participants: userId });
+    await Message.deleteMany({ conversationId });
+
+    res.json({ success: true, message: 'Conversation deleted' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getConversations, getMessages, sendMessage, clearConversation, deleteConversation };
